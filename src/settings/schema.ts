@@ -11,6 +11,8 @@ export interface SettingsState {
   progression: { upperIncrement: number; lowerIncrement: number };
   /** When true, warm-up rows disappear from Home once marked done. */
   hideCompletedWarmups: boolean;
+  theme: 'dark' | 'light' | 'system';
+  tmPercent: number;
 }
 
 export const defaultSettings: SettingsState = {
@@ -21,4 +23,6 @@ export const defaultSettings: SettingsState = {
   schedule: { mode: 'rolling', days: [] },
   progression: { upperIncrement: 2.5, lowerIncrement: 5 },
   hideCompletedWarmups: false,
+  theme: 'system',
+  tmPercent: 0.85,
 };

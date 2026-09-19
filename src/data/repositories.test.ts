@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from './db';
-import { profileRepo, liftRepo, cycleRepo, sessionRepo } from './repositories';
+import { profileRepo, liftRepo, cycleRepo, sessionRepo, settingsRepo } from './repositories';
 import type { Cycle, Session } from './repositories';
+import { defaultSettings } from '../settings/schema';
 
 beforeEach(async () => { await db.delete(); await db.open(); });
 
@@ -81,5 +82,17 @@ describe('sessionRepo.all / cycleRepo.all', () => {
     await cycleRepo.add({ index: 1, startedAt: '2026-01-01', status: 'completed', template: 'base', fivesPro: false, tm: { press: 50, bench: 70, squat: 100, deadlift: 120 } });
     await cycleRepo.add({ index: 2, startedAt: '2026-02-01', status: 'active', template: 'base', fivesPro: false, tm: { press: 52.5, bench: 72.5, squat: 105, deadlift: 125 } });
     expect(await cycleRepo.all()).toHaveLength(2);
+  });
+});
+describe('settingsRepo', () => {
+  it('returns defaults when nothing saved', async () => {
+    expect(await settingsRepo.get()).toEqual(defaultSettings);
+  });
+  it('saves and reloads settings, merged over defaults', async () => {
+    await settingsRepo.save({ ...defaultSettings, tmPercent: 0.9, theme: 'dark' });
+    const s = await settingsRepo.get();
+    expect(s.tmPercent).toBe(0.9);
+    expect(s.theme).toBe('dark');
+    expect(s.displayPreset).toBe(defaultSettings.displayPreset); // untouched fields keep defaults
   });
 });

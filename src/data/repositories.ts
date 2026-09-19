@@ -1,11 +1,14 @@
 import { db } from './db';
 import type { Unit, LiftKey, LiftCategory, TemplateKey, WeekNumber, SetKind } from '../domain/types';
+import { defaultSettings } from '../settings/schema';
+import type { SettingsState } from '../settings/schema';
 
 export interface Profile { id: 'me'; units: Unit; roundingIncrement: number; tmPercent: number; }
 export interface Lift { key: LiftKey; name: string; category: LiftCategory; oneRm: number; trainingMax: number; increment: number; }
 export interface Cycle { id?: number; index: number; startedAt: string; status: 'active' | 'completed'; template: TemplateKey; fivesPro: boolean; tm: Record<LiftKey, number>; }
 export interface LoggedSet { targetReps: number; weight: number; actualReps: number | null; done: boolean; isAmrap: boolean; kind: SetKind; }
 export interface Session { id?: number; cycleId: number; week: WeekNumber; liftKey: LiftKey; date: string; status: 'planned' | 'done'; sets: LoggedSet[]; amrapReps: number | null; estimated1RM: number | null; rpe: number | null; notes: string; }
+export type StoredSettings = SettingsState & { id: 'app' };
 
 export const profileRepo = {
   get: (): Promise<Profile | undefined> => db.profile.get('me'),
@@ -27,4 +30,13 @@ export const sessionRepo = {
   add: (s: Session): Promise<number> => db.sessions.add(s),
   update: (id: number, patch: Partial<Session>): Promise<void> => db.sessions.update(id, patch).then(() => {}),
   all: (): Promise<Session[]> => db.sessions.toArray(),
+};
+export const settingsRepo = {
+  get: async (): Promise<SettingsState> => {
+    const row = await db.settings.get('app');
+    if (!row) return defaultSettings;
+    const { id: _id, ...rest } = row;
+    return { ...defaultSettings, ...rest };
+  },
+  save: (s: SettingsState) => db.settings.put({ id: 'app', ...s }).then(() => {}),
 };
