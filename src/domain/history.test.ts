@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { estimatedOneRmSeries, trainingMaxSeries, personalRecord } from './history';
+import { estimatedOneRmSeries, trainingMaxSeries, personalRecord, cycleLog } from './history';
 import type { Session, Cycle } from '../data/repositories';
 
 const sess = (o: Partial<Session>): Session => ({
@@ -47,4 +47,20 @@ describe('personalRecord', () => {
     expect(personalRecord(sessions, 'press')).toEqual({ est1RM: 125, date: '2026-02-01' });
   });
   it('is null with no data', () => expect(personalRecord([], 'press')).toBeNull());
+});
+
+describe('cycleLog', () => {
+  it('groups sessions by cycle, newest first, with a top-set summary', () => {
+    const cycles = [
+      { index: 1, startedAt: '2026-01-01', status: 'completed', template: 'base', fivesPro: false, tm: {} },
+      { index: 2, startedAt: '2026-02-01', status: 'active', template: 'base', fivesPro: false, tm: {} },
+    ] as unknown as Cycle[];
+    const sessions = [
+      sess({ cycleId: 1, date: '2026-01-02', liftKey: 'press', week: 1, amrapReps: 5, estimated1RM: 120, sets: [amrapSet(100)] }),
+      sess({ cycleId: 2, date: '2026-02-02', liftKey: 'squat', week: 1, amrapReps: 6, estimated1RM: 210, sets: [amrapSet(180)] }),
+    ];
+    const groups = cycleLog(sessions, cycles);
+    expect(groups.map(g => g.cycleIndex)).toEqual([2, 1]);
+    expect(groups[0].entries[0]).toMatchObject({ liftKey: 'squat', topWeight: 180, topReps: 6, isAmrap: true, est1RM: 210 });
+  });
 });
