@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateMainSets, generateWarmups } from './sets';
+import { generateMainSets, generateWarmups, generateSupplemental } from './sets';
 
 const base = { fivesPro: false, roundingIncrement: 2.5 };
 
@@ -39,5 +39,25 @@ describe('generateWarmups', () => {
     expect(w.map(x => x.weight)).toEqual([40, 50, 60]);
     expect(w.map(x => x.reps)).toEqual([5, 5, 3]);
     expect(w.every(x => x.kind === 'warmup' && !x.isAmrap)).toBe(true);
+  });
+});
+
+describe('generateSupplemental', () => {
+  it('base has no supplemental', () => {
+    expect(generateSupplemental('base', 100, 1, { roundingIncrement: 2.5 })).toEqual([]);
+  });
+  it('BBB is 5x10 at 50% by default', () => {
+    const s = generateSupplemental('bbb', 100, 1, { roundingIncrement: 2.5 });
+    expect(s).toHaveLength(5);
+    expect(s.every(x => x.reps === 10 && x.weight === 50 && x.kind === 'supplemental')).toBe(true);
+  });
+  it('FSL is 5x5 at the week first-working pct', () => {
+    const s = generateSupplemental('fsl', 100, 2, { roundingIncrement: 2.5 }); // wk2 first pct 0.70
+    expect(s).toHaveLength(5);
+    expect(s.every(x => x.reps === 5 && x.weight === 70)).toBe(true);
+  });
+  it('no supplemental on deload week', () => {
+    expect(generateSupplemental('bbb', 100, 4, { roundingIncrement: 2.5 })).toEqual([]);
+    expect(generateSupplemental('fsl', 100, 4, { roundingIncrement: 2.5 })).toEqual([]);
   });
 });
