@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { db } from '../../data/db';
 import { profileRepo, liftRepo, cycleRepo, sessionRepo } from '../../data/repositories';
 import { estimate1RM } from '../../domain';
@@ -120,5 +120,35 @@ describe('Home', () => {
     fireEvent.click(screen.getByLabelText('Mark 40kg set done'));
 
     expect(screen.queryByLabelText('Mark 40kg set done')).toBeNull();
+  });
+
+  it('routes to /cycle-end once all four lifts have logged week 4', async () => {
+    const cycleId = await seed();
+    const liftKeys = ['press', 'bench', 'squat', 'deadlift'] as const;
+    for (const liftKey of liftKeys) {
+      await sessionRepo.add({
+        cycleId,
+        week: 4,
+        liftKey,
+        date: '2026-01-28',
+        status: 'done',
+        sets: [],
+        amrapReps: null,
+        estimated1RM: null,
+        rpe: null,
+        notes: '',
+      });
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/cycle-end" element={<div>Cycle end screen</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Cycle end screen')).toBeTruthy();
   });
 });

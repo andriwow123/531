@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { buildWorkout, computePlates, estimate1RM, nextUp, LIFT_ORDER } from '../../domain';
 import type { LiftKey, TemplateKey, Unit, WeekNumber, WorkingSet } from '../../domain';
 import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
@@ -42,6 +42,7 @@ export interface HomeProps {
 
 export default function Home({ settings = defaultSettings }: HomeProps = {}) {
   const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
+  const navigate = useNavigate();
 
   const [loaded, setLoaded] = useState<LoadedWorkout | null | undefined>(undefined);
   const [rows, setRows] = useState<RowState[]>([]);
@@ -66,6 +67,18 @@ export default function Home({ settings = defaultSettings }: HomeProps = {}) {
       const logged = sessions
         .filter((s) => s.status === 'done')
         .map((s) => ({ liftKey: s.liftKey, week: s.week }));
+
+      // Once every lift has logged its week-4 deload, the cycle is done —
+      // route to the end-of-cycle review instead of asking nextUp to advance
+      // past week 4 (it has nowhere further to go and would just re-serve
+      // week 4 press).
+      const week4Logged = new Set(logged.filter((s) => s.week === 4).map((s) => s.liftKey));
+      const cycleComplete = LIFT_ORDER.every((key) => week4Logged.has(key));
+      if (cycleComplete) {
+        if (!cancelled) navigate('/cycle-end', { replace: true });
+        return;
+      }
+
       const { liftKey, week } = nextUp(logged);
       const lift = lifts.find((l) => l.key === liftKey);
 
