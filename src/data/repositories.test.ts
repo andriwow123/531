@@ -89,10 +89,10 @@ describe('settingsRepo', () => {
     expect(await settingsRepo.get()).toEqual(defaultSettings);
   });
   it('saves and reloads settings, merged over defaults', async () => {
-    await settingsRepo.save({ ...defaultSettings, tmPercent: 0.9, theme: 'dark' });
+    await settingsRepo.save({ ...defaultSettings, theme: 'dark', displayPreset: 'detailed' });
     const s = await settingsRepo.get();
-    expect(s.tmPercent).toBe(0.9);
     expect(s.theme).toBe('dark');
-    expect(s.displayPreset).toBe(defaultSettings.displayPreset); // untouched fields keep defaults
+    expect(s.displayPreset).toBe('detailed');
+    expect(s.restTimer).toEqual(defaultSettings.restTimer); // untouched fields keep defaults
   });
 });
