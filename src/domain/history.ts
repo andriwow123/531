@@ -37,10 +37,9 @@ export interface CycleLogGroup { cycleIndex: number; startedAt: string; entries:
 export function cycleLog(sessions: Session[], cycles: Cycle[]): CycleLogGroup[] {
   const byIndex = new Map<number, { startedAt: string; entries: CycleLogEntry[] }>();
   const cycleById = new Map<number, Cycle>();
-  // Join key: cycle.id (the real FK sessions store as cycleId in production data
-  // from the DB) with a fallback to cycle.index for cycle records that don't carry
-  // an id (e.g. hand-built fixtures).
-  for (const c of cycles) cycleById.set(c.id ?? c.index, c);
+  // Join key: cycle.id, the real FK sessions store as cycleId in production data
+  // from the DB (see Home.tsx, which sets Session.cycleId = cycle.id).
+  for (const c of cycles) if (c.id != null) cycleById.set(c.id, c);
 
   for (const s of sessions) {
     if (s.status !== 'done') continue;

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { estimatedOneRmSeries, trainingMaxSeries, personalRecord, cycleLog } from './history';
+import { estimate1RM } from './estimate';
 import type { Session, Cycle } from '../data/repositories';
 
 const sess = (o: Partial<Session>): Session => ({
@@ -22,6 +23,10 @@ describe('estimatedOneRmSeries', () => {
   it('skips sessions with no AMRAP result', () => {
     const s = estimatedOneRmSeries([sess({ amrapReps: null, sets: [amrapSet(100)] })], 'press');
     expect(s).toEqual([]);
+  });
+  it('falls back to a computed est1RM when the session has none stored', () => {
+    const s = estimatedOneRmSeries([sess({ amrapReps: 8, estimated1RM: null, sets: [amrapSet(90)] })], 'press');
+    expect(s).toEqual([{ date: '2026-01-01', weight: 90, reps: 8, est1RM: estimate1RM(90, 8) }]);
   });
 });
 
@@ -52,8 +57,8 @@ describe('personalRecord', () => {
 describe('cycleLog', () => {
   it('groups sessions by cycle, newest first, with a top-set summary', () => {
     const cycles = [
-      { index: 1, startedAt: '2026-01-01', status: 'completed', template: 'base', fivesPro: false, tm: {} },
-      { index: 2, startedAt: '2026-02-01', status: 'active', template: 'base', fivesPro: false, tm: {} },
+      { id: 1, index: 1, startedAt: '2026-01-01', status: 'completed', template: 'base', fivesPro: false, tm: {} },
+      { id: 2, index: 2, startedAt: '2026-02-01', status: 'active', template: 'base', fivesPro: false, tm: {} },
     ] as unknown as Cycle[];
     const sessions = [
       sess({ cycleId: 1, date: '2026-01-02', liftKey: 'press', week: 1, amrapReps: 5, estimated1RM: 120, sets: [amrapSet(100)] }),
