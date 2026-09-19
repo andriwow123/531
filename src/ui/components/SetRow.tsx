@@ -80,16 +80,19 @@ export default function SetRow({
           </div>
         ) : (
           <div className="mt-3 flex items-center gap-2">
+            <label htmlFor="amrap-reps-done" className="text-[13px] font-bold">
+              Reps done
+            </label>
             <input
+              id="amrap-reps-done"
               type="number"
               inputMode="numeric"
               min={0}
-              aria-label={`Reps completed for ${rowLabel} AMRAP set`}
+              aria-label="Reps done"
               value={actualReps}
               onChange={(e) => onRepsChange(Number(e.target.value) || 0)}
-              className="w-16 rounded-lg bg-[var(--overlay-on-accent)] px-2 py-1.5 text-center font-bold text-inherit outline-none"
+              className="w-16 rounded-lg bg-[var(--overlay-on-accent)] px-2 py-1.5 text-center font-bold text-inherit outline-none appearance-none [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none"
             />
-            <span className="text-[13px] font-semibold">reps</span>
             <button
               type="button"
               onClick={onToggleDone}
@@ -123,6 +126,11 @@ export default function SetRow({
         (done ? 'opacity-60' : '')
       }
     >
+      {kind === 'warmup' && (
+        <span className="flex-none rounded-[var(--r-pill)] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-[var(--muted)]">
+          Warm-up
+        </span>
+      )}
       <span className="text-[28px] font-extrabold tabular-nums">{weight}</span>
       <span className="-ml-1.5 text-[13px] font-semibold text-[var(--muted)]">{unit}</span>
       <span className="ml-auto text-[13px] font-semibold text-[var(--muted)]">{targetReps} reps</span>
