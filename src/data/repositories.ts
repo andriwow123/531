@@ -20,9 +20,11 @@ export const cycleRepo = {
   active: (): Promise<Cycle | undefined> => db.cycles.where('status').equals('active').first(),
   add: (c: Cycle): Promise<number> => db.cycles.add(c),
   complete: (id: number): Promise<void> => db.cycles.update(id, { status: 'completed' }).then(() => {}),
+  all: (): Promise<Cycle[]> => db.cycles.toArray(),
 };
 export const sessionRepo = {
   forCycle: (cycleId: number): Promise<Session[]> => db.sessions.where('cycleId').equals(cycleId).toArray(),
   add: (s: Session): Promise<number> => db.sessions.add(s),
   update: (id: number, patch: Partial<Session>): Promise<void> => db.sessions.update(id, patch).then(() => {}),
+  all: (): Promise<Session[]> => db.sessions.toArray(),
 };

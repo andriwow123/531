@@ -71,3 +71,15 @@ describe('sessionRepo', () => {
     expect(patched[0].notes).toBe('x');
   });
 });
+describe('sessionRepo.all / cycleRepo.all', () => {
+  it('returns all sessions across cycles', async () => {
+    await sessionRepo.add({ cycleId: 1, week: 1, liftKey: 'press', date: '2026-01-01', status: 'done', sets: [], amrapReps: 5, estimated1RM: 100, rpe: null, notes: '' });
+    await sessionRepo.add({ cycleId: 2, week: 1, liftKey: 'press', date: '2026-02-01', status: 'done', sets: [], amrapReps: 6, estimated1RM: 110, rpe: null, notes: '' });
+    expect(await sessionRepo.all()).toHaveLength(2);
+  });
+  it('returns all cycles', async () => {
+    await cycleRepo.add({ index: 1, startedAt: '2026-01-01', status: 'completed', template: 'base', fivesPro: false, tm: { press: 50, bench: 70, squat: 100, deadlift: 120 } });
+    await cycleRepo.add({ index: 2, startedAt: '2026-02-01', status: 'active', template: 'base', fivesPro: false, tm: { press: 52.5, bench: 72.5, squat: 105, deadlift: 125 } });
+    expect(await cycleRepo.all()).toHaveLength(2);
+  });
+});
