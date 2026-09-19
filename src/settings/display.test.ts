@@ -16,4 +16,18 @@ describe('resolveDisplay', () => {
     expect(r.plateBreakdown).toBe(true);
     expect(r.notes).toBe(false);
   });
+  it('standard shows plateBreakdown/restTimer/notes/estimated1RM/warmups and hides the rest', () => {
+    const r = resolveDisplay('standard', {});
+    expect(r).toEqual({
+      plateBreakdown: true,
+      restTimer: true,
+      notes: true,
+      estimated1RM: true,
+      warmups: true,
+      charts: false,
+      amrapPrBadges: false,
+      assistanceSection: false,
+      bodyweightWidget: false,
+    });
+  });
 });
