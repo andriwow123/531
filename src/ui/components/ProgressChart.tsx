@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -66,19 +66,25 @@ function readToken(name: string, fallback: string): string {
   return value || fallback;
 }
 
-/** Resolves theme tokens to concrete color strings once on mount. Recharts SVG
- *  attributes (stroke/fill/tick colors) don't reliably honor `var(--token)`, so
- *  we read the computed values from `document.documentElement` instead (P2-R1). */
+/** Resolves theme tokens to concrete color strings. Recharts SVG attributes
+ *  (stroke/fill/tick colors) don't reliably honor `var(--token)`, so we read
+ *  the computed values from `document.documentElement` instead (P2-R1). Each
+ *  token falls back to the hardcoded light-theme value only when the computed
+ *  value reads empty (e.g. jsdom under test, or the stylesheet hasn't loaded). */
+function resolveThemeColors(): ChartColors {
+  return {
+    accent: readToken('--accent', FALLBACK_COLORS.accent),
+    muted: readToken('--muted', FALLBACK_COLORS.muted),
+    line: readToken('--line', FALLBACK_COLORS.line),
+    surface: readToken('--surface', FALLBACK_COLORS.surface),
+  };
+}
+
+/** Resolves theme colors synchronously on first render (via a lazy `useState`
+ *  initializer) so DARK mode doesn't flash light-theme colors for one frame
+ *  before a post-paint effect could otherwise correct them. */
 function useThemeColors(): ChartColors {
-  const [colors, setColors] = useState<ChartColors>(FALLBACK_COLORS);
-  useEffect(() => {
-    setColors({
-      accent: readToken('--accent', FALLBACK_COLORS.accent),
-      muted: readToken('--muted', FALLBACK_COLORS.muted),
-      line: readToken('--line', FALLBACK_COLORS.line),
-      surface: readToken('--surface', FALLBACK_COLORS.surface),
-    });
-  }, []);
+  const [colors] = useState<ChartColors>(resolveThemeColors);
   return colors;
 }
 
@@ -172,6 +178,12 @@ export default function ProgressChart({ oneRm, tm, unit }: ProgressChartProps) {
   const referenceKey: 'est1RM' | 'tm' = metric === 'oneRm' ? 'tm' : 'est1RM';
   const headlineLatestFlag: 'isLatestOneRm' | 'isLatestTm' = metric === 'oneRm' ? 'isLatestOneRm' : 'isLatestTm';
 
+  const headlineDot = useMemo(
+    () => makeHeadlineDot(colors.accent, colors.surface, headlineLatestFlag),
+    [colors.accent, colors.surface, headlineLatestFlag]
+  );
+  const referenceDot = useMemo(() => makeReferenceDot(colors.muted), [colors.muted]);
+
   return (
     <div>
       <div role="group" aria-label="Headline metric" className="inline-flex rounded-[var(--r-pill)] bg-[var(--surface-2)] p-1">
@@ -216,24 +228,22 @@ export default function ProgressChart({ oneRm, tm, unit }: ProgressChartProps) {
                 cursor={{ stroke: colors.line, strokeWidth: 1 }}
               />
               <Line
-                key="reference-line"
                 dataKey={referenceKey}
                 name={METRIC_LABEL[otherMetric]}
                 stroke={colors.muted}
                 strokeWidth={2}
                 strokeOpacity={0.55}
-                dot={makeReferenceDot(colors.muted)}
+                dot={referenceDot}
                 activeDot={{ r: 4, fill: colors.muted, stroke: colors.surface, strokeWidth: 2 }}
                 connectNulls
                 isAnimationActive={false}
               />
               <Line
-                key="headline-line"
                 dataKey={headlineKey}
                 name={METRIC_LABEL[metric]}
                 stroke={colors.accent}
                 strokeWidth={2}
-                dot={makeHeadlineDot(colors.accent, colors.surface, headlineLatestFlag)}
+                dot={headlineDot}
                 activeDot={{ r: 5, fill: colors.accent, stroke: colors.surface, strokeWidth: 2 }}
                 connectNulls
                 isAnimationActive={false}
