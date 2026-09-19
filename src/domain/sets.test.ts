@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateMainSets } from './sets';
+import { generateMainSets, generateWarmups } from './sets';
 
 const base = { fivesPro: false, roundingIncrement: 2.5 };
 
@@ -30,5 +30,14 @@ describe('generateMainSets', () => {
   it('rounds weights to increment', () => {
     // 102.5 * 0.65 = 66.625 -> 67.5
     expect(generateMainSets(102.5, 1, base)[0].weight).toBe(67.5);
+  });
+});
+
+describe('generateWarmups', () => {
+  it('is 40/50/60 with reps 5/5/3', () => {
+    const w = generateWarmups(100, 2.5);
+    expect(w.map(x => x.weight)).toEqual([40, 50, 60]);
+    expect(w.map(x => x.reps)).toEqual([5, 5, 3]);
+    expect(w.every(x => x.kind === 'warmup' && !x.isAmrap)).toBe(true);
   });
 });

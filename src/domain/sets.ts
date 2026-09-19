@@ -22,3 +22,11 @@ export function generateMainSets(
     };
   });
 }
+
+const WARMUP = [{ pct: 0.4, reps: 5 }, { pct: 0.5, reps: 5 }, { pct: 0.6, reps: 3 }];
+export function generateWarmups(tm: number, roundingIncrement: number): WorkingSet[] {
+  return WARMUP.map((s) => ({
+    kind: 'warmup', pct: s.pct, reps: s.reps, isAmrap: false,
+    weight: roundToIncrement(tm * s.pct, roundingIncrement),
+  }));
+}
