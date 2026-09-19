@@ -5,6 +5,7 @@ import type { LiftKey, TemplateKey, Unit, WeekNumber, WorkingSet } from '../../d
 import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, LoggedSet } from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
+import type { SettingsState } from '../../settings/schema';
 import { resolveDisplay } from '../../settings/display';
 import SetRow from '../components/SetRow';
 
@@ -34,9 +35,14 @@ interface LoadedWorkout {
   unit: Unit;
 }
 
-const display = resolveDisplay(defaultSettings.displayPreset, defaultSettings.displayOverrides);
+export interface HomeProps {
+  /** Overridable for tests. Defaults to the shared `defaultSettings` constant. */
+  settings?: SettingsState;
+}
 
-export default function Home() {
+export default function Home({ settings = defaultSettings }: HomeProps = {}) {
+  const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
+
   const [loaded, setLoaded] = useState<LoadedWorkout | null | undefined>(undefined);
   const [rows, setRows] = useState<RowState[]>([]);
   const [notes, setNotes] = useState('');
@@ -63,12 +69,12 @@ export default function Home() {
       const { liftKey, week } = nextUp(logged);
       const lift = lifts.find((l) => l.key === liftKey);
 
-      const showWarmups = defaultSettings.template.warmups && display.warmups;
+      const showWarmups = settings.template.warmups && display.warmups;
       const sets = buildWorkout({
         tm: cycle.tm[liftKey],
         week,
-        template: defaultSettings.template.selected,
-        fivesPro: defaultSettings.template.fivesPro,
+        template: settings.template.selected,
+        fivesPro: settings.template.fivesPro,
         warmups: showWarmups,
         roundingIncrement: profile.roundingIncrement,
       });
@@ -82,7 +88,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [settings]);
 
   function toggleDone(index: number) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, done: !r.done } : r)));
@@ -153,11 +159,11 @@ export default function Home() {
   const visibleRows = rows
     .map((row, index) => ({ row, index }))
     .filter(
-      ({ row }) => !(defaultSettings.hideCompletedWarmups && row.set.kind === 'warmup' && row.done),
+      ({ row }) => !(settings.hideCompletedWarmups && row.set.kind === 'warmup' && row.done),
     );
 
-  const restLabel = `${Math.floor(defaultSettings.restTimer.defaultSeconds / 60)}:${String(
-    defaultSettings.restTimer.defaultSeconds % 60,
+  const restLabel = `${Math.floor(settings.restTimer.defaultSeconds / 60)}:${String(
+    settings.restTimer.defaultSeconds % 60,
   ).padStart(2, '0')}`;
 
   return (
@@ -180,7 +186,7 @@ export default function Home() {
             </div>
             <div className="text-[26px] font-extrabold leading-tight">{loaded.liftName}</div>
             <div className="text-[12.5px] font-bold text-[var(--accent)]">
-              {TEMPLATE_LABEL[defaultSettings.template.selected]}
+              {TEMPLATE_LABEL[settings.template.selected]}
             </div>
           </div>
         </header>
@@ -202,7 +208,7 @@ export default function Home() {
           ))}
         </ul>
 
-        {display.restTimer && defaultSettings.restTimer.enabled && (
+        {display.restTimer && settings.restTimer.enabled && (
           <div className="mt-3 rounded-[var(--r-card)] bg-[var(--surface-2)] py-3 text-center text-sm font-bold">
             Rest timer · <span className="text-[var(--accent)]">{restLabel}</span>
           </div>

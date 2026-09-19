@@ -50,7 +50,7 @@ export default function SetRow({
           <span
             className={
               'ml-auto rounded-[var(--r-pill)] px-2.5 py-1 text-[13px] font-extrabold ' +
-              (done ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'bg-black/15')
+              (done ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'bg-[var(--overlay-on-accent)]')
             }
           >
             {targetReps}+ AMRAP
@@ -73,14 +73,14 @@ export default function SetRow({
               aria-label={`Reps completed for ${weight}${unit} AMRAP set`}
               value={actualReps}
               onChange={(e) => onRepsChange(Number(e.target.value) || 0)}
-              className="w-16 rounded-lg bg-black/15 px-2 py-1.5 text-center font-bold text-inherit outline-none"
+              className="w-16 rounded-lg bg-[var(--overlay-on-accent)] px-2 py-1.5 text-center font-bold text-inherit outline-none"
             />
             <span className="text-[13px] font-semibold">reps</span>
             <button
               type="button"
               onClick={onToggleDone}
               aria-label={`Mark ${weight}${unit} AMRAP set done`}
-              className="ml-auto rounded-[var(--r-pill)] bg-black/15 px-3.5 py-1.5 text-[13px] font-extrabold"
+              className="ml-auto rounded-[var(--r-pill)] bg-[var(--overlay-on-accent)] px-3.5 py-1.5 text-[13px] font-extrabold"
             >
               Done
             </button>
@@ -91,7 +91,7 @@ export default function SetRow({
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11.5px] font-bold">
             <b className="mr-0.5">Per side</b>
             {plates.perSide.map((p) => (
-              <span key={p.plate} className="rounded-[var(--r-pill)] bg-black/10 px-2.5 py-0.5 tabular-nums">
+              <span key={p.plate} className="rounded-[var(--r-pill)] bg-[var(--overlay-on-accent)] px-2.5 py-0.5 tabular-nums">
                 {p.plate}
                 {p.count > 1 ? `×${p.count}` : ''}
               </span>

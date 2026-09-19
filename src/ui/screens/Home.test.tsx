@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { db } from '../../data/db';
 import { profileRepo, liftRepo, cycleRepo, sessionRepo } from '../../data/repositories';
 import { estimate1RM } from '../../domain';
+import { defaultSettings } from '../../settings/schema';
 import Home from './Home';
 
 beforeEach(async () => {
@@ -88,5 +89,36 @@ describe('Home', () => {
 
     expect(session.amrapReps).toBe(7);
     expect(session.estimated1RM).toBeCloseTo(estimate1RM(85, 7), 5);
+  });
+
+  it('keeps a completed warm-up row visible when hideCompletedWarmups is false', async () => {
+    await seed();
+    render(
+      <MemoryRouter>
+        <Home settings={{ ...defaultSettings, hideCompletedWarmups: false }} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Overhead Press');
+    fireEvent.click(screen.getByLabelText('Mark 40kg set done'));
+
+    expect(screen.getByLabelText('Mark 40kg set done')).toBeTruthy();
+  });
+
+  it('hides a completed warm-up row once marked done when hideCompletedWarmups is true', async () => {
+    await seed();
+    render(
+      <MemoryRouter>
+        <Home settings={{ ...defaultSettings, hideCompletedWarmups: true }} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Overhead Press');
+    // Still visible before it's marked done.
+    expect(screen.getByLabelText('Mark 40kg set done')).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText('Mark 40kg set done'));
+
+    expect(screen.queryByLabelText('Mark 40kg set done')).toBeNull();
   });
 });
