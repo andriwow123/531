@@ -1,9 +1,13 @@
-function App() {
-  return (
-    <main className="flex min-h-screen items-center justify-center">
-      <h1 className="text-2xl font-semibold">5/3/1 App</h1>
-    </main>
-  );
+import { RouterProvider } from 'react-router-dom';
+import { router, type AppRouter } from './router';
+
+interface AppProps {
+  /** Overridable for tests (e.g. a createMemoryRouter instance). Defaults to the real browser router. */
+  router?: AppRouter;
+}
+
+function App({ router: routerProp }: AppProps = {}) {
+  return <RouterProvider router={routerProp ?? router} />;
 }
 
 export default App;
