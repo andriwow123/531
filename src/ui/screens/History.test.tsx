@@ -3,7 +3,6 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { db } from '../../data/db';
 import { profileRepo, liftRepo, cycleRepo, sessionRepo } from '../../data/repositories';
-import { defaultSettings } from '../../settings/schema';
 import History from './History';
 
 beforeEach(async () => {
@@ -66,7 +65,7 @@ describe('History', () => {
 
     render(
       <MemoryRouter>
-        <History settings={{ ...defaultSettings, displayPreset: 'detailed' }} />
+        <History />
       </MemoryRouter>,
     );
 
@@ -83,7 +82,10 @@ describe('History', () => {
     expect(screen.getByText(/85 kg × 7/)).toBeTruthy();
   });
 
-  it('hides PR badges and charts when their display elements are off', async () => {
+  it('always shows the PR callout and progress chart for a lift with data', async () => {
+    // The PR callout and chart are the History tab's core content in v1, so
+    // they must render unconditionally for a lift that has data — there is
+    // no Settings screen yet to opt back into them if they were hidden.
     const cycleId = await seed();
     await sessionRepo.add({
       cycleId,
@@ -100,14 +102,14 @@ describe('History', () => {
 
     render(
       <MemoryRouter>
-        <History settings={{ ...defaultSettings, displayPreset: 'simple' }} />
+        <History />
       </MemoryRouter>,
     );
 
     await screen.findByRole('heading', { name: 'Overhead Press' });
-    expect(screen.queryByText(/PR 106/)).toBeNull();
-    expect(screen.queryByRole('button', { name: /est\. 1rm/i })).toBeNull();
-    // Cycle log still renders regardless of chart/PR display settings.
+    expect(screen.getByText(/PR 106/)).toBeTruthy();
+    // One "Est. 1RM" toggle button per lift card (chart renders unconditionally).
+    expect(screen.getAllByRole('button', { name: /est\. 1rm/i }).length).toBe(4);
     expect(screen.getByText(/85 kg × 7/)).toBeTruthy();
   });
 });

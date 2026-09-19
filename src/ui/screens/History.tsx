@@ -10,9 +10,6 @@ import {
 import type { LiftKey, Unit } from '../../domain';
 import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, Lift, Session } from '../../data/repositories';
-import { defaultSettings } from '../../settings/schema';
-import type { SettingsState } from '../../settings/schema';
-import { resolveDisplay } from '../../settings/display';
 import ProgressChart from '../components/ProgressChart';
 
 const LIFT_NAMES: Record<LiftKey, string> = {
@@ -40,13 +37,7 @@ interface LoadedData {
   unit: Unit;
 }
 
-export interface HistoryProps {
-  /** Overridable for tests. Defaults to the shared `defaultSettings` constant. */
-  settings?: SettingsState;
-}
-
-export default function History({ settings = defaultSettings }: HistoryProps = {}) {
-  const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
+export default function History() {
   const [data, setData] = useState<LoadedData | undefined>(undefined);
 
   useEffect(() => {
@@ -130,7 +121,7 @@ export default function History({ settings = defaultSettings }: HistoryProps = {
               >
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-base font-extrabold">{liftName(key)}</h2>
-                  {display.amrapPrBadges && pr && (
+                  {pr && (
                     <span className="rounded-[var(--r-pill)] bg-[var(--accent-soft)] px-2.5 py-1 text-[12px] font-extrabold text-[var(--accent)]">
                       PR {Math.round(pr.est1RM)}
                       {data.unit} · {formatDate(pr.date)}
@@ -138,11 +129,9 @@ export default function History({ settings = defaultSettings }: HistoryProps = {
                   )}
                 </div>
 
-                {display.charts && (
-                  <div className="mt-2">
-                    <ProgressChart oneRm={oneRm} tm={tm} unit={data.unit} />
-                  </div>
-                )}
+                <div className="mt-2">
+                  <ProgressChart oneRm={oneRm} tm={tm} unit={data.unit} />
+                </div>
               </li>
             );
           })}
