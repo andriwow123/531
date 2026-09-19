@@ -4,6 +4,7 @@ import { profileRepo } from '../data/repositories';
 import Onboarding from './screens/Onboarding';
 import Home from './screens/Home';
 import CycleEnd from './screens/CycleEnd';
+import History from './screens/History';
 
 /** Loader guard: routes that require a completed profile redirect to onboarding when none is saved. */
 async function requireProfile() {
@@ -14,11 +15,7 @@ async function requireProfile() {
   return null;
 }
 
-// Screens land in later tasks — minimal stubs for now.
-function HistoryScreen() {
-  return <h1>History</h1>;
-}
-
+// Settings screen lands in a later task — minimal stub for now.
 function SettingsScreen() {
   return <h1>Settings</h1>;
 }
@@ -27,7 +24,7 @@ export const routes: RouteObject[] = [
   { path: '/onboarding', element: <Onboarding /> },
   { path: '/', element: <Home />, loader: requireProfile },
   { path: '/cycle-end', element: <CycleEnd />, loader: requireProfile },
-  { path: '/history', element: <HistoryScreen />, loader: requireProfile },
+  { path: '/history', element: <History />, loader: requireProfile },
   { path: '/settings', element: <SettingsScreen />, loader: requireProfile },
 ];
 

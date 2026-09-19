@@ -1,0 +1,189 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  estimatedOneRmSeries,
+  trainingMaxSeries,
+  personalRecord,
+  cycleLog,
+  LIFT_ORDER,
+} from '../../domain';
+import type { LiftKey, Unit } from '../../domain';
+import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
+import type { Cycle, Lift, Session } from '../../data/repositories';
+import { defaultSettings } from '../../settings/schema';
+import type { SettingsState } from '../../settings/schema';
+import { resolveDisplay } from '../../settings/display';
+import ProgressChart from '../components/ProgressChart';
+
+const LIFT_NAMES: Record<LiftKey, string> = {
+  press: 'Overhead Press',
+  bench: 'Bench Press',
+  squat: 'Squat',
+  deadlift: 'Deadlift',
+};
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Formats an ISO date ("2026-01-05") as "Jan 5, 2026" without going through
+ *  `Date` (which would shift by a day in timezones behind UTC). */
+function formatDate(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!match) return iso;
+  const month = MONTHS[Number(match[2]) - 1] ?? match[2];
+  return `${month} ${Number(match[3])}, ${match[1]}`;
+}
+
+interface LoadedData {
+  sessions: Session[];
+  cycles: Cycle[];
+  lifts: Lift[];
+  unit: Unit;
+}
+
+export interface HistoryProps {
+  /** Overridable for tests. Defaults to the shared `defaultSettings` constant. */
+  settings?: SettingsState;
+}
+
+export default function History({ settings = defaultSettings }: HistoryProps = {}) {
+  const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
+  const [data, setData] = useState<LoadedData | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      const [sessions, cycles, lifts, profile] = await Promise.all([
+        sessionRepo.all(),
+        cycleRepo.all(),
+        liftRepo.all(),
+        profileRepo.get(),
+      ]);
+      if (cancelled) return;
+      setData({ sessions, cycles, lifts, unit: profile?.units ?? 'kg' });
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const bottomNav = (
+    <nav className="mt-5 flex items-center justify-around text-xs font-bold text-[var(--muted)]">
+      <Link to="/">Today</Link>
+      <span className="text-[var(--accent)]">History</span>
+      <Link to="/settings">Settings</Link>
+    </nav>
+  );
+
+  if (data === undefined) {
+    return (
+      <main className="min-h-screen bg-[var(--bg)] px-4 py-8 text-[var(--text)]">
+        <p className="text-sm text-[var(--muted)]">Loading history…</p>
+      </main>
+    );
+  }
+
+  const liftName = (key: LiftKey): string =>
+    data.lifts.find((l) => l.key === key)?.name ?? LIFT_NAMES[key];
+
+  const hasDoneSessions = data.sessions.some((s) => s.status === 'done');
+
+  if (!hasDoneSessions) {
+    return (
+      <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
+        <div className="w-full max-w-md pb-4">
+          <header className="mb-4">
+            <div className="text-xs font-semibold text-[var(--muted)]">History</div>
+            <h1 className="text-[26px] font-extrabold leading-tight">Progress</h1>
+          </header>
+          <p className="text-sm text-[var(--muted)]">
+            Log a few workouts and your progress shows up here.
+          </p>
+          {bottomNav}
+        </div>
+      </main>
+    );
+  }
+
+  const groups = cycleLog(data.sessions, data.cycles);
+
+  return (
+    <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
+      <div className="w-full max-w-md pb-4">
+        <header className="mb-4">
+          <div className="text-xs font-semibold text-[var(--muted)]">History</div>
+          <h1 className="text-[26px] font-extrabold leading-tight">Progress</h1>
+        </header>
+
+        <ul className="flex flex-col gap-3 list-none p-0 m-0">
+          {LIFT_ORDER.map((key) => {
+            const oneRm = estimatedOneRmSeries(data.sessions, key);
+            const tm = trainingMaxSeries(data.cycles, key);
+            const pr = personalRecord(data.sessions, key);
+
+            return (
+              <li
+                key={key}
+                className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-base font-extrabold">{liftName(key)}</h2>
+                  {display.amrapPrBadges && pr && (
+                    <span className="rounded-[var(--r-pill)] bg-[var(--accent-soft)] px-2.5 py-1 text-[12px] font-extrabold text-[var(--accent)]">
+                      PR {Math.round(pr.est1RM)}
+                      {data.unit} · {formatDate(pr.date)}
+                    </span>
+                  )}
+                </div>
+
+                {display.charts && (
+                  <div className="mt-2">
+                    <ProgressChart oneRm={oneRm} tm={tm} unit={data.unit} />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+
+        <section className="mt-5">
+          <h2 className="mb-2 text-sm font-extrabold text-[var(--muted)]">Cycle log</h2>
+          <ul className="flex flex-col gap-3 list-none p-0 m-0">
+            {groups.map((group) => (
+              <li
+                key={group.cycleIndex}
+                className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4"
+              >
+                <div className="text-[12.5px] font-bold text-[var(--accent)]">
+                  Cycle {group.cycleIndex}
+                </div>
+                <ul className="mt-2 flex flex-col gap-2 list-none p-0 m-0">
+                  {group.entries.map((entry, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2 text-[13px]">
+                      <span className="text-[var(--muted)]">
+                        {formatDate(entry.date)} · {liftName(entry.liftKey)} · Week {entry.week}
+                      </span>
+                      <span className="font-bold tabular-nums whitespace-nowrap">
+                        {entry.topWeight} {data.unit} × {entry.topReps ?? '—'}
+                        {entry.est1RM != null && (
+                          <span className="ml-1 font-semibold text-[var(--muted)]">
+                            (est {Math.round(entry.est1RM)}
+                            {data.unit})
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {bottomNav}
+      </div>
+    </main>
+  );
+}
