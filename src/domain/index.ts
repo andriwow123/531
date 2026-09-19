@@ -9,3 +9,5 @@ export { suggestProgression } from './progression';
 export type { ProgressionInput, ProgressionDecision, ProgressionResult } from './progression';
 export { buildWorkout } from './workout';
 export type { WorkoutParams } from './workout';
+export { nextUp, LIFT_ORDER } from './schedule';
+export type { LoggedSession } from './schedule';

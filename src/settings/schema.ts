@@ -9,6 +9,8 @@ export interface SettingsState {
   restTimer: { enabled: boolean; defaultSeconds: number; notify: boolean };
   schedule: { mode: 'rolling' | 'fixedDays'; days: number[] };
   progression: { upperIncrement: number; lowerIncrement: number };
+  /** When true, warm-up rows disappear from Home once marked done. */
+  hideCompletedWarmups: boolean;
 }
 
 export const defaultSettings: SettingsState = {
@@ -18,4 +20,5 @@ export const defaultSettings: SettingsState = {
   restTimer: { enabled: true, defaultSeconds: 120, notify: false },
   schedule: { mode: 'rolling', days: [] },
   progression: { upperIncrement: 2.5, lowerIncrement: 5 },
+  hideCompletedWarmups: false,
 };
