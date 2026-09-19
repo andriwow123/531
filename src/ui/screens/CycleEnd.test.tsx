@@ -108,4 +108,44 @@ describe('CycleEnd', () => {
     expect(active?.index).toBe(2);
     expect(active?.tm).toEqual({ press: 102.5, bench: 102.5, squat: 105, deadlift: 105 });
   });
+
+  it('disables Apply and refuses to write when a New-TM is cleared to 0, and re-enables once fixed', async () => {
+    const cycleId = await seed();
+    render(
+      <MemoryRouter>
+        <CycleEnd />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Overhead Press');
+
+    const pressTmInput = screen.getByLabelText('New training max for Overhead Press');
+    fireEvent.change(pressTmInput, { target: { value: '' } });
+
+    const applyButton = screen.getByRole('button', { name: /apply/i });
+    expect(applyButton).toBeDisabled();
+
+    fireEvent.click(applyButton);
+
+    // Give any (erroneous) async write a chance to land, then confirm nothing changed.
+    await new Promise((r) => setTimeout(r, 0));
+    const liftsAfterAttempt = await liftRepo.all();
+    expect(liftsAfterAttempt.find((l) => l.key === 'press')?.trainingMax).toBe(100);
+    expect(await cycleRepo.active()).toMatchObject({ id: cycleId, index: 1 });
+
+    fireEvent.change(pressTmInput, { target: { value: '102.5' } });
+    expect(applyButton).not.toBeDisabled();
+
+    fireEvent.click(applyButton);
+
+    await waitFor(async () => {
+      const lifts = await liftRepo.all();
+      expect(lifts.find((l) => l.key === 'press')?.trainingMax).toBe(102.5);
+    });
+
+    await waitFor(async () => {
+      const active = await cycleRepo.active();
+      expect(active?.index).toBe(2);
+    });
+  });
 });

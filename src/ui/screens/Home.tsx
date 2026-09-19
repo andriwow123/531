@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { buildWorkout, computePlates, estimate1RM, nextUp, LIFT_ORDER } from '../../domain';
-import type { LiftKey, TemplateKey, Unit, WeekNumber, WorkingSet } from '../../domain';
+import type { LiftKey, SetKind, TemplateKey, Unit, WeekNumber, WorkingSet } from '../../domain';
 import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, LoggedSet } from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
@@ -25,6 +25,16 @@ interface RowState {
   set: WorkingSet;
   done: boolean;
   actualReps: number;
+  /** 1-based position of this set within its own kind (e.g. 2nd warm-up). */
+  kindIndex: number;
+}
+
+function withKindIndex(sets: WorkingSet[]): RowState[] {
+  const counts: Record<SetKind, number> = { warmup: 0, main: 0, supplemental: 0 };
+  return sets.map((set) => {
+    counts[set.kind] += 1;
+    return { set, done: false, actualReps: set.reps, kindIndex: counts[set.kind] };
+  });
 }
 
 interface LoadedWorkout {
@@ -86,14 +96,14 @@ export default function Home({ settings = defaultSettings }: HomeProps = {}) {
       const sets = buildWorkout({
         tm: cycle.tm[liftKey],
         week,
-        template: settings.template.selected,
-        fivesPro: settings.template.fivesPro,
+        template: cycle.template,
+        fivesPro: cycle.fivesPro,
         warmups: showWarmups,
         roundingIncrement: profile.roundingIncrement,
       });
 
       if (cancelled) return;
-      setRows(sets.map((set) => ({ set, done: false, actualReps: set.reps })));
+      setRows(withKindIndex(sets));
       setLoaded({ cycle, liftKey, liftName: lift?.name ?? liftKey, week, unit: profile.units });
     }
 
@@ -212,6 +222,8 @@ export default function Home({ settings = defaultSettings }: HomeProps = {}) {
               unit={loaded.unit}
               targetReps={row.set.reps}
               isAmrap={row.set.isAmrap}
+              kind={row.set.kind}
+              setNumber={row.kindIndex}
               done={row.done}
               actualReps={row.actualReps}
               onToggleDone={() => toggleDone(index)}

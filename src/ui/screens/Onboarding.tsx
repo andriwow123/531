@@ -41,14 +41,20 @@ export default function Onboarding() {
     setOneRms((prev) => ({ ...prev, [key]: value }));
   }
 
+  const allOneRmsValid = LIFT_ORDER.every((key) => {
+    const n = Number(oneRms[key]);
+    return oneRms[key].trim() !== '' && Number.isFinite(n) && n > 0;
+  });
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!allOneRmsValid) return;
 
     const roundingIncrement = roundingIncrementFor(units);
     const tm: Record<LiftKey, number> = { press: 0, bench: 0, squat: 0, deadlift: 0 };
     const lifts: Lift[] = LIFT_ORDER.map((key) => {
       const meta = LIFT_META[key];
-      const oneRm = Number(oneRms[key]) || 0;
+      const oneRm = Number(oneRms[key]);
       const increment = incrementFor(meta.category, units);
       const trainingMax = computeTrainingMax(oneRm, TM_PERCENT, roundingIncrement);
       tm[key] = trainingMax;
@@ -126,10 +132,16 @@ export default function Onboarding() {
 
           <button
             type="submit"
-            className="w-full rounded-[var(--r-pill)] bg-[var(--accent)] text-[var(--on-accent)] font-bold py-3 text-base"
+            disabled={!allOneRmsValid}
+            className="w-full rounded-[var(--r-pill)] bg-[var(--accent)] text-[var(--on-accent)] font-bold py-3 text-base disabled:opacity-60"
           >
             Start training
           </button>
+          {!allOneRmsValid && (
+            <p className="text-center text-[12px] font-semibold text-[var(--accent)]">
+              Enter a 1RM greater than 0 for every lift to continue.
+            </p>
+          )}
 
           <p className="text-center text-xs text-[var(--muted)]">
             Uses the standard base template at 85% training max. Advanced setup lives in Settings.

@@ -140,8 +140,11 @@ export default function CycleEnd() {
     });
   }
 
+  const hasInvalidNewTm = loaded ? loaded.rows.some((row) => !(row.newTm > 0)) : true;
+
   async function handleApply() {
     if (!loaded || loaded.cycle.id == null) return;
+    if (loaded.rows.some((row) => !(row.newTm > 0))) return;
     setApplying(true);
 
     const tm = {} as Record<LiftKey, number>;
@@ -241,11 +244,17 @@ export default function CycleEnd() {
                     <input
                       type="number"
                       step={0.5}
+                      min={0}
                       aria-label={`New training max for ${row.liftName}`}
                       value={row.newTm}
                       onChange={(e) => changeNewTm(row.liftKey, Number(e.target.value))}
                       className="mt-1 w-24 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 text-center font-bold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                     />
+                    {!(row.newTm > 0) && (
+                      <span className="mt-1 text-[11px] font-semibold text-[var(--accent)]">
+                        Must be greater than 0
+                      </span>
+                    )}
                   </label>
 
                   <span className="ml-auto text-[12px] font-semibold text-[var(--muted)]">was {row.currentTm}</span>
@@ -258,11 +267,16 @@ export default function CycleEnd() {
         <button
           type="button"
           onClick={handleApply}
-          disabled={applying}
+          disabled={applying || hasInvalidNewTm}
           className="mt-5 w-full rounded-[var(--r-pill)] bg-[var(--accent)] py-3 text-base font-bold text-[var(--on-accent)] disabled:opacity-60"
         >
           Apply / start next cycle
         </button>
+        {hasInvalidNewTm && (
+          <p className="mt-2 text-center text-[12px] font-semibold text-[var(--accent)]">
+            Every new training max must be greater than 0 before you can continue.
+          </p>
+        )}
       </div>
     </main>
   );

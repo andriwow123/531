@@ -1,4 +1,4 @@
-import type { Unit } from '../../domain';
+import type { SetKind, Unit } from '../../domain';
 
 export interface PlateBreakdown {
   perSide: { plate: number; count: number }[];
@@ -10,12 +10,22 @@ export interface SetRowProps {
   unit: Unit;
   targetReps: number;
   isAmrap: boolean;
+  /** Set kind (warm-up / main / supplemental), used to build a unique label. */
+  kind: SetKind;
+  /** 1-based position of this row within its own kind (e.g. 2nd warm-up). */
+  setNumber: number;
   done: boolean;
   actualReps: number;
   onToggleDone: () => void;
   onRepsChange: (reps: number) => void;
   plates?: PlateBreakdown | null;
 }
+
+const KIND_LABEL: Record<SetKind, string> = {
+  warmup: 'warm-up',
+  main: 'main',
+  supplemental: 'supplemental',
+};
 
 /**
  * One prescribed set: a big tabular weight, its unit, target reps, and a way
@@ -28,12 +38,16 @@ export default function SetRow({
   unit,
   targetReps,
   isAmrap,
+  kind,
+  setNumber,
   done,
   actualReps,
   onToggleDone,
   onRepsChange,
   plates,
 }: SetRowProps) {
+  const rowLabel = `${KIND_LABEL[kind]} set ${setNumber} (${weight}${unit})`;
+
   if (isAmrap) {
     return (
       <li
@@ -70,7 +84,7 @@ export default function SetRow({
               type="number"
               inputMode="numeric"
               min={0}
-              aria-label={`Reps completed for ${weight}${unit} AMRAP set`}
+              aria-label={`Reps completed for ${rowLabel} AMRAP set`}
               value={actualReps}
               onChange={(e) => onRepsChange(Number(e.target.value) || 0)}
               className="w-16 rounded-lg bg-[var(--overlay-on-accent)] px-2 py-1.5 text-center font-bold text-inherit outline-none"
@@ -79,7 +93,7 @@ export default function SetRow({
             <button
               type="button"
               onClick={onToggleDone}
-              aria-label={`Mark ${weight}${unit} AMRAP set done`}
+              aria-label={`Mark ${rowLabel} AMRAP set done`}
               className="ml-auto rounded-[var(--r-pill)] bg-[var(--overlay-on-accent)] px-3.5 py-1.5 text-[13px] font-extrabold"
             >
               Done
@@ -116,7 +130,7 @@ export default function SetRow({
         type="button"
         onClick={onToggleDone}
         aria-pressed={done}
-        aria-label={`Mark ${weight}${unit} set done`}
+        aria-label={`Mark ${rowLabel} done`}
         className={
           'grid h-[22px] w-[22px] flex-none place-items-center rounded-full text-xs font-extrabold ' +
           (done ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--line)] text-transparent')
