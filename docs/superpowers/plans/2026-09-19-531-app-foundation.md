@@ -859,9 +859,13 @@ export function resolveDisplay(
 **Interfaces:**
 - Produces: a routed app shell with routes `/onboarding`, `/` (home), `/cycle-end`, and a theme applied via CSS variables.
 
-- [ ] **Step 1: Run frontend-design skill to lock the visual system.** Produce 2–3 mockups (orange/black, ~2020 feel, oversized tabular weight numbers) and have the owner pick one. Capture chosen palette + type as CSS variables in `tokens.css`. (This is a design step, not a test step.)
+- [x] **Step 1: Visual system LOCKED — owner picked Direction "COACH".** Modern coaching-app feel (~2020): rounded cards, a cycle progress ring, warm orange accent on a charcoal ground, weights as the hero in Manrope 800. No further mockups. Visual reference: `C:/Users/andri/AppData/Local/Temp/claude/E--Projects-531/9ba537ad-ac85-4c1a-bd19-1e6b57c40471/scratchpad/looks.html` (the Direction B / `.d-coach` block). **Owner refinements (apply in Tasks 13-16):** (a) warm-ups render as normal set rows (not a one-line summary), with a settings toggle to hide them once completed; (b) the main workout screen stays lean — the AMRAP set shows only the logged reps; estimated 1RM does NOT appear on Home (it lives in History/Progress [Plan 2] and the end-of-cycle summary [Task 16]).
 
-- [ ] **Step 2: Implement theme tokens** — `src/ui/theme/tokens.css` with `:root` variables for `--bg`, `--surface`, `--text`, `--accent` (orange), `--accent-contrast`, radius, and a dark-first scheme (see spec §11). Import in `main.tsx`.
+- [ ] **Step 2: Implement theme tokens** — `src/ui/theme/tokens.css`. Dark-first (primary), with a light variant. Declare every token on bare `:root` (light values), redefine under `@media (prefers-color-scheme: dark):root:not([data-theme="light"])` and `:root[data-theme="dark"]` (dark values), and set `body{background:var(--bg)}`. Tokens & values (COACH):
+  - DARK (primary): `--bg:#16161A; --surface:#212129; --surface-2:#2A2A34; --line:#33333F; --accent:#FB8C3C; --accent-strong:#F2701E; --accent-soft:rgba(251,140,60,.15); --on-accent:#1B1205; --text:#F6F5F3; --muted:#9A99A6;`
+  - LIGHT: `--bg:#FAF7F3; --surface:#FFFFFF; --surface-2:#F1ECE6; --line:#E4DDD4; --accent:#E8721C; --accent-strong:#D9630F; --accent-soft:rgba(232,114,28,.14); --on-accent:#FFFFFF; --text:#1C1A17; --muted:#6B6459;`
+  - Radius tokens: `--r-card:16px; --r-hero:20px; --r-pill:999px;`
+  - Load Manrope from Google Fonts (weights 500/600/700/800) with a `system-ui, sans-serif` fallback; set it as the base font. Weights/numbers use `font-variant-numeric: tabular-nums`. Import `tokens.css` in `main.tsx`.
 
 - [ ] **Step 3: Implement router** — `react-router-dom` `createBrowserRouter` with the three routes; `App.tsx` renders `<RouterProvider>`. On load, if `profileRepo.get()` is empty, redirect to `/onboarding`.
 
@@ -934,7 +938,10 @@ it('creates lifts with 85% TM and an active cycle', async () => {
 
 - [ ] **Step 3: Failing test for Home** — render Home after onboarding seed; assert it shows the current lift name and the three main sets' weights; toggle a set "done"; click Save; assert a `Session` was written with `sets` and (for the AMRAP set) `estimated1RM` set from the entered reps.
 
-- [ ] **Step 4: Run → FAIL. Implement `Home.tsx`**: load active cycle + lifts + settings; compute `nextUp`; `buildWorkout` with that lift's TM; render sets via `SetRow` (weight big + tabular), gating `plateBreakdown`, `restTimer`, `notes`, `estimated1RM`, `warmups` through `resolveDisplay`. Capture AMRAP reps on the top set; on Save, compute `estimate1RM(topWeight, amrapReps)`, build `LoggedSet[]`, `sessionRepo.add({...})`. Run → PASS.
+- [ ] **Step 4: Run → FAIL. Implement `Home.tsx`** in the locked COACH style (see Task 13 Step 1; visually match the `.d-coach` mockup — rounded cards, cycle progress ring, warm-orange gradient hero on the AMRAP set, Manrope 800 weights). Behavior: load active cycle + lifts + settings; compute `nextUp`; `buildWorkout` with that lift's TM; render EVERY set (warm-up, main, supplemental) as a `SetRow` with the big tabular weight. Gate `plateBreakdown`, `restTimer`, `notes` through `resolveDisplay`. **Owner refinements:**
+  - **Warm-ups render as normal set rows** (identical treatment to working sets), not a summary line. Add a settings field `hideCompletedWarmups: boolean` (default `false`; extend `SettingsState` in `src/settings/schema.ts` and its default) — when `true`, warm-up rows disappear from Home once marked done. Also honor the existing `warmups` display element (if off, warm-ups aren't generated/shown at all).
+  - **Est 1RM is NOT rendered on Home.** The AMRAP set row shows only the logged reps (e.g. "5 reps ✓"). Still COMPUTE and STORE `estimated1RM` on the session (`estimate1RM(topWeight, amrapReps)`) for History/end-of-cycle use — just don't display it here.
+  On Save: build `LoggedSet[]` from all rows, set `amrapReps` + stored `estimated1RM`, `sessionRepo.add({...})`. Run → PASS.
 
 - [ ] **Step 5: Manual verify + commit** — `npm run dev`: log a workout, confirm it persists and the next lift advances. `git commit -am "feat(ui): Home workout screen + schedule"`
 
