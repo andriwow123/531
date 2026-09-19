@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { db } from '../../data/db';
 import { settingsRepo } from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
@@ -34,10 +34,7 @@ describe('SettingsProvider / useSettings', () => {
 
     expect(screen.getByTestId('preset')).toHaveTextContent('detailed');
 
-    // allow persistence microtask to flush
-    await new Promise((r) => setTimeout(r, 0));
-    const saved = await settingsRepo.get();
-    expect(saved.displayPreset).toBe('detailed');
+    await waitFor(async () => expect((await settingsRepo.get()).displayPreset).toBe('detailed'));
   });
 
   it('reflects settings already persisted before mount', async () => {
@@ -65,8 +62,7 @@ describe('SettingsProvider theme effect', () => {
     );
 
     await screen.findByTestId('preset');
-    await new Promise((r) => setTimeout(r, 0));
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    await waitFor(() => expect(document.documentElement.getAttribute('data-theme')).toBe('dark'));
   });
 
   it('removes data-theme when theme is "system"', async () => {
@@ -80,7 +76,6 @@ describe('SettingsProvider theme effect', () => {
     );
 
     await screen.findByTestId('preset');
-    await new Promise((r) => setTimeout(r, 0));
-    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+    await waitFor(() => expect(document.documentElement.hasAttribute('data-theme')).toBe(false));
   });
 });

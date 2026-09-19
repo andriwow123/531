@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { settingsRepo } from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
@@ -13,6 +13,8 @@ const SettingsContext = createContext<SettingsContextValue | undefined>(undefine
 
 export function SettingsProvider(props: { children: ReactNode }) {
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   useEffect(() => {
     let cancelled = false;
@@ -34,11 +36,9 @@ export function SettingsProvider(props: { children: ReactNode }) {
   }, [settings.theme]);
 
   const updateSettings = (patch: Partial<SettingsState>) => {
-    setSettings((prev) => {
-      const next = { ...prev, ...patch };
-      void settingsRepo.save(next);
-      return next;
-    });
+    const next = { ...settingsRef.current, ...patch };
+    setSettings(next);
+    void settingsRepo.save(next);
   };
 
   return <SettingsContext.Provider value={{ settings, updateSettings }}>{props.children}</SettingsContext.Provider>;
