@@ -86,6 +86,7 @@ export default function LiftCard({
   // immediately, with no loading gate); the mount effect below corrects this
   // to the real logged session, if any, once the async lookup resolves.
   const [existingSession, setExistingSession] = useState<Session | null>(null);
+  const [saveError, setSaveError] = useState(false);
   const savingRef = useRef(false);
 
   const workoutKey = `${liftKey}:${week}:${cycle.id ?? 'x'}:${cycle.tm[liftKey]}:${settings.template.warmups}`;
@@ -159,14 +160,26 @@ export default function LiftCard({
     onLogged?.();
   }
 
+  // Guarded save: on failure (e.g. IndexedDB quota / private mode) reset the
+  // in-flight guard and surface a retry affordance rather than silently
+  // stranding a "done" workout with nothing persisted.
+  function triggerSave() {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaveError(false);
+    save().catch(() => {
+      savingRef.current = false;
+      setSaveError(true);
+    });
+  }
+
   // Auto-save the moment every main ("work") set is marked done.
   useEffect(() => {
     if (existingSession !== null) return;
     if (savingRef.current) return;
     const mainRows = rows.filter((r) => r.set.kind === 'main');
     if (mainRows.length === 0 || !mainRows.every((r) => r.done)) return;
-    savingRef.current = true;
-    void save();
+    triggerSave();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, existingSession]);
 
@@ -209,6 +222,22 @@ export default function LiftCard({
                 ` · est. 1RM ${Math.round(existingSession.estimated1RM)} ${unit}`}
             </span>
           )}
+        </div>
+      )}
+
+      {existingSession === null && saveError && (
+        <div
+          role="alert"
+          className="mb-2 flex items-center justify-between gap-2 rounded-[var(--r-card)] border border-[var(--accent)] bg-[var(--surface-2)] px-3 py-2.5 text-[13px] font-bold text-[var(--text)]"
+        >
+          <span>Couldn't save — check device storage.</span>
+          <button
+            type="button"
+            onClick={triggerSave}
+            className="rounded-[var(--r-pill)] bg-[var(--accent)] px-3.5 py-1.5 text-[13px] font-extrabold text-[var(--on-accent)]"
+          >
+            Retry
+          </button>
         </div>
       )}
 
@@ -259,11 +288,11 @@ export default function LiftCard({
                     </div>
                   ) : (
                     <div className="mt-3 flex items-center gap-2">
-                      <label htmlFor="amrap-reps-done" className="text-[13px] font-bold">
+                      <label htmlFor={`amrap-reps-${liftKey}`} className="text-[13px] font-bold">
                         Reps done
                       </label>
                       <input
-                        id="amrap-reps-done"
+                        id={`amrap-reps-${liftKey}`}
                         type="number"
                         inputMode="numeric"
                         min={0}
