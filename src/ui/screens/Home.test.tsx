@@ -393,3 +393,33 @@ describe('Home — running rest timer', () => {
     });
   });
 });
+
+describe('Home — exercise demos', () => {
+  it('shows the "How to perform" affordance when exerciseDemos is enabled', async () => {
+    await seed();
+    // defaultSettings.exerciseDemos is true; seed explicitly so the assertion
+    // doesn't depend on that default staying true.
+    await settingsRepo.save({ ...defaultSettings, exerciseDemos: true });
+    renderHome();
+
+    await screen.findByRole('heading', { name: 'Overhead Press' });
+
+    expect(await screen.findByRole('button', { name: /how to perform/i })).toBeTruthy();
+  });
+
+  it('hides the "How to perform" affordance when exerciseDemos is disabled', async () => {
+    await seed();
+    await settingsRepo.save({ ...defaultSettings, exerciseDemos: false });
+    renderHome();
+
+    await screen.findByRole('heading', { name: 'Overhead Press' });
+
+    // SettingsProvider seeds state with defaultSettings (exerciseDemos: true)
+    // and only reflects the saved settings (exerciseDemos: false) once its
+    // mount-time load resolves, so assert via waitFor rather than a
+    // synchronous query (see other "Home —" describes above for the same race).
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /how to perform/i })).toBeNull();
+    });
+  });
+});

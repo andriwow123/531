@@ -8,6 +8,7 @@ import { resolveDisplay } from '../../settings/display';
 import { useSettings } from '../settings/SettingsContext';
 import { useRestTimer } from '../hooks/useRestTimer';
 import SetRow from '../components/SetRow';
+import ExerciseDemo from '../components/ExerciseDemo';
 
 const TEMPLATE_LABEL: Record<TemplateKey, string> = {
   base: '5/3/1 week',
@@ -354,6 +355,12 @@ export default function Home() {
         {isSelectedDone && (
           <div className="mb-3 inline-flex items-center gap-1.5 rounded-[var(--r-pill)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px] font-bold text-[var(--muted)]">
             <span aria-hidden="true">✓</span> Already logged this week
+          </div>
+        )}
+
+        {settings.exerciseDemos && (
+          <div className="mb-3">
+            <ExerciseDemo liftKey={selectedLift} />
           </div>
         )}
 
