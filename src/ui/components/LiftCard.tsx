@@ -16,6 +16,14 @@ export interface LiftCardProps {
   dayNumber: number;
   settings: SettingsState;
   onLogged?: () => void;
+  /**
+   * Pre-resolved logged session for this lift/week, supplied by a parent
+   * that already loaded the cycle's sessions (avoids a redundant per-card
+   * DB lookup and the resulting one-tick flash from interactive -> read-only).
+   * `undefined` (prop omitted) preserves the legacy self-lookup behavior;
+   * `null` means "confirmed not logged"; a `Session` means "confirmed logged".
+   */
+  session?: Session | null;
 }
 
 const LIFT_NAMES: Record<LiftKey, string> = {
@@ -78,6 +86,7 @@ export default function LiftCard({
   dayNumber,
   settings,
   onLogged,
+  session,
 }: LiftCardProps) {
   const [rows, setRows] = useState<RowState[]>([]);
   const [rowsForRef, setRowsForRef] = useState<string | null>(null);
@@ -110,6 +119,14 @@ export default function LiftCard({
     let cancelled = false;
     savingRef.current = false;
 
+    // A parent that already loaded this cycle's sessions passes the
+    // pre-resolved session (or `null` for "confirmed none") — skip the
+    // self-lookup and just sync from the prop.
+    if (session !== undefined) {
+      setExistingSession(session);
+      return;
+    }
+
     async function check() {
       if (cycle.id == null) {
         if (!cancelled) setExistingSession(null);
@@ -126,7 +143,7 @@ export default function LiftCard({
     return () => {
       cancelled = true;
     };
-  }, [cycle.id, liftKey, week]);
+  }, [cycle.id, liftKey, week, session]);
 
   async function save() {
     const sets: LoggedSet[] = rows.map((r) => ({
