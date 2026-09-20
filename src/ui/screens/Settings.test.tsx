@@ -80,8 +80,11 @@ describe('Settings', () => {
 
     await screen.findByRole('heading', { name: /settings/i });
 
-    expect(screen.getByText('kg', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.getByText('85%')).toBeInTheDocument();
+    // Units/TM% only render once the component's own mount-time
+    // profileRepo.get() resolves (a "—" placeholder shows until then), so
+    // these must be awaited rather than asserted synchronously.
+    expect(await screen.findByText('kg', { selector: 'span' })).toBeInTheDocument();
+    expect(await screen.findByText('85%')).toBeInTheDocument();
     expect(screen.getByText(/onboarding/i)).toBeInTheDocument();
   });
 });
@@ -134,7 +137,15 @@ describe('Settings — notify permission', () => {
 
     await screen.findByRole('heading', { name: /settings/i });
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Notify when rest ends' }));
+    // SettingsProvider seeds state with defaultSettings (notify: false) and
+    // only reflects the saved settings (notify: true) once its mount-time
+    // load resolves. Wait for that load to land in the UI before clicking,
+    // otherwise the click can race the load and flip notify OFF->ON instead
+    // of ON->OFF, calling requestPermission when this test asserts it isn't.
+    const notifySwitch = await screen.findByRole('switch', { name: 'Notify when rest ends' });
+    await waitFor(() => expect(notifySwitch).toBeChecked());
+
+    fireEvent.click(notifySwitch);
 
     expect(requestPermission).not.toHaveBeenCalled();
     await waitFor(async () => expect((await settingsRepo.get()).restTimer.notify).toBe(false));
