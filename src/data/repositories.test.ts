@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from './db';
-import { profileRepo, liftRepo, cycleRepo, sessionRepo, settingsRepo } from './repositories';
+import { profileRepo, liftRepo, cycleRepo, sessionRepo, settingsRepo, bodyweightRepo } from './repositories';
 import type { Cycle, Session } from './repositories';
 import { defaultSettings } from '../settings/schema';
 
@@ -94,5 +94,12 @@ describe('settingsRepo', () => {
     expect(s.theme).toBe('dark');
     expect(s.displayPreset).toBe('detailed');
     expect(s.restTimer).toEqual(defaultSettings.restTimer); // untouched fields keep defaults
+  });
+});
+describe('bodyweightRepo', () => {
+  it('adds and lists bodyweight entries', async () => {
+    await bodyweightRepo.add({ date: '2026-02-01', weight: 82.5 });
+    await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
+    expect(await bodyweightRepo.all()).toHaveLength(2);
   });
 });

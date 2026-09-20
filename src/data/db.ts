@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Profile, Lift, Cycle, Session, StoredSettings } from './repositories';
+import type { Profile, Lift, Cycle, Session, StoredSettings, BodyweightEntry } from './repositories';
 
 export class AppDB extends Dexie {
   profile!: Table<Profile, string>;
@@ -7,6 +7,7 @@ export class AppDB extends Dexie {
   cycles!: Table<Cycle, number>;
   sessions!: Table<Session, number>;
   settings!: Table<StoredSettings, string>;
+  bodyweight!: Table<BodyweightEntry, number>;
   constructor() {
     super('fivethreeone');
     this.version(1).stores({
@@ -16,6 +17,7 @@ export class AppDB extends Dexie {
       sessions: '++id, cycleId, week, liftKey',
     });
     this.version(2).stores({ settings: 'id' });
+    this.version(3).stores({ bodyweight: '++id, date' });
   }
 }
 export const db = new AppDB();

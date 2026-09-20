@@ -15,3 +15,4 @@ export { estimatedOneRmSeries, trainingMaxSeries, personalRecord, cycleLog } fro
 export type { OneRmPoint, TmPoint, PR, CycleLogEntry, CycleLogGroup } from './history';
 export { EXERCISE_DEMOS, getExerciseDemo } from './exercises';
 export type { ExerciseDemo } from './exercises';
+export { bodyweightSeries, latestWeight } from './bodyweight';

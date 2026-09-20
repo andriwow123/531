@@ -9,6 +9,7 @@ export interface Cycle { id?: number; index: number; startedAt: string; status: 
 export interface LoggedSet { targetReps: number; weight: number; actualReps: number | null; done: boolean; isAmrap: boolean; kind: SetKind; }
 export interface Session { id?: number; cycleId: number; week: WeekNumber; liftKey: LiftKey; date: string; status: 'planned' | 'done'; sets: LoggedSet[]; amrapReps: number | null; estimated1RM: number | null; rpe: number | null; notes: string; }
 export type StoredSettings = SettingsState & { id: 'app' };
+export interface BodyweightEntry { id?: number; date: string; weight: number; }
 
 export const profileRepo = {
   get: (): Promise<Profile | undefined> => db.profile.get('me'),
@@ -39,4 +40,8 @@ export const settingsRepo = {
     return { ...defaultSettings, ...rest };
   },
   save: (s: SettingsState) => db.settings.put({ id: 'app', ...s }).then(() => {}),
+};
+export const bodyweightRepo = {
+  add: (e: BodyweightEntry): Promise<number> => db.bodyweight.add(e),
+  all: (): Promise<BodyweightEntry[]> => db.bodyweight.toArray(),
 };
