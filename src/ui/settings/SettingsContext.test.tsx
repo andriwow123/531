@@ -16,6 +16,15 @@ function Consumer() {
     <div>
       <span data-testid="preset">{settings.displayPreset}</span>
       <button onClick={() => updateSettings({ displayPreset: 'detailed' })}>Set detailed</button>
+      <button
+        onClick={() => {
+          // Two updateSettings calls in the SAME tick, different fields, no await between.
+          updateSettings({ displayPreset: 'detailed' });
+          updateSettings({ theme: 'dark' });
+        }}
+      >
+        Set both
+      </button>
     </div>
   );
 }
@@ -35,6 +44,24 @@ describe('SettingsProvider / useSettings', () => {
     expect(screen.getByTestId('preset')).toHaveTextContent('detailed');
 
     await waitFor(async () => expect((await settingsRepo.get()).displayPreset).toBe('detailed'));
+  });
+
+  it('merges two updateSettings calls fired in the same tick (no clobbering)', async () => {
+    render(
+      <SettingsProvider>
+        <Consumer />
+      </SettingsProvider>,
+    );
+
+    // both updateSettings calls happen synchronously inside one click handler,
+    // i.e. before React re-renders/commits between them.
+    fireEvent.click(screen.getByRole('button', { name: /set both/i }));
+
+    await waitFor(async () => {
+      const s = await settingsRepo.get();
+      expect(s.displayPreset).toBe('detailed');
+      expect(s.theme).toBe('dark');
+    });
   });
 
   it('reflects settings already persisted before mount', async () => {

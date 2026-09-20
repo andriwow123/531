@@ -13,18 +13,39 @@ const SettingsContext = createContext<SettingsContextValue | undefined>(undefine
 
 export function SettingsProvider(props: { children: ReactNode }) {
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
+  const loadedRef = useRef(false);
+  // Tracks the latest committed settings for reads only (mutated during render,
+  // never used to compute the next state) so the mount-load below can tell
+  // whether the user already edited settings before the load resolved.
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
+  // mount load
   useEffect(() => {
     let cancelled = false;
     settingsRepo.get().then((loaded) => {
-      if (!cancelled) setSettings(loaded);
+      if (cancelled) return;
+      const editedBeforeLoad = settingsRef.current !== defaultSettings;
+      loadedRef.current = true;
+      if (editedBeforeLoad) {
+        // The user already called updateSettings before this load resolved.
+        // That local edit is authoritative — persist it instead of clobbering
+        // it with the now-stale on-disk snapshot we just read.
+        void settingsRepo.save(settingsRef.current);
+      } else {
+        setSettings(loaded);
+      }
     });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // persist on every change AFTER the initial load (skip default/initial renders)
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    void settingsRepo.save(settings);
+  }, [settings]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -35,11 +56,9 @@ export function SettingsProvider(props: { children: ReactNode }) {
     }
   }, [settings.theme]);
 
-  const updateSettings = (patch: Partial<SettingsState>) => {
-    const next = { ...settingsRef.current, ...patch };
-    setSettings(next);
-    void settingsRepo.save(next);
-  };
+  // pure + chaining: no side effects, functional updater
+  const updateSettings = (patch: Partial<SettingsState>) =>
+    setSettings((prev) => ({ ...prev, ...patch }));
 
   return <SettingsContext.Provider value={{ settings, updateSettings }}>{props.children}</SettingsContext.Provider>;
 }
