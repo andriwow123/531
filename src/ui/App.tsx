@@ -1,5 +1,6 @@
 import { RouterProvider } from 'react-router-dom';
 import { router, type AppRouter } from './router';
+import { SettingsProvider } from './settings/SettingsContext';
 
 interface AppProps {
   /** Overridable for tests (e.g. a createMemoryRouter instance). Defaults to the real browser router. */
@@ -7,7 +8,11 @@ interface AppProps {
 }
 
 function App({ router: routerProp }: AppProps = {}) {
-  return <RouterProvider router={routerProp ?? router} />;
+  return (
+    <SettingsProvider>
+      <RouterProvider router={routerProp ?? router} />
+    </SettingsProvider>
+  );
 }
 
 export default App;
