@@ -292,6 +292,11 @@ export default function Settings() {
               checked={settings.hideCompletedWarmups}
               onChange={() => updateSettings({ hideCompletedWarmups: !settings.hideCompletedWarmups })}
             />
+            <ToggleRow
+              label="Exercise demos"
+              checked={settings.exerciseDemos}
+              onChange={() => updateSettings({ exerciseDemos: !settings.exerciseDemos })}
+            />
           </Section>
 
           <Section title="Templates">

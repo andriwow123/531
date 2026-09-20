@@ -12,6 +12,8 @@ export interface SettingsState {
   /** When true, warm-up rows disappear from Home once marked done. */
   hideCompletedWarmups: boolean;
   theme: 'dark' | 'light' | 'system';
+  /** When true, Home shows an expandable "How to perform" demo for the selected lift. */
+  exerciseDemos: boolean;
 }
 
 export const defaultSettings: SettingsState = {
@@ -23,4 +25,5 @@ export const defaultSettings: SettingsState = {
   progression: { upperIncrement: 2.5, lowerIncrement: 5 },
   hideCompletedWarmups: false,
   theme: 'system',
+  exerciseDemos: true,
 };

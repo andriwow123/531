@@ -74,6 +74,24 @@ describe('Settings', () => {
     await waitFor(async () => expect((await profileRepo.get())?.roundingIncrement).toBe(5));
   });
 
+  it('toggling Exercise demos persists exerciseDemos', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    // SettingsProvider seeds state with defaultSettings and only reflects the
+    // loaded settings once its mount-time load resolves; wait for the switch
+    // to land in its loaded (checked, per defaultSettings.exerciseDemos=true)
+    // state before clicking, to avoid racing the load (see notify tests above).
+    const exerciseDemosSwitch = await screen.findByRole('switch', { name: /exercise demos/i });
+    await waitFor(() => expect(exerciseDemosSwitch).toBeChecked());
+
+    fireEvent.click(exerciseDemosSwitch);
+
+    await waitFor(async () => expect((await settingsRepo.get()).exerciseDemos).toBe(false));
+  });
+
   it('shows units and Training Max % read-only with an onboarding note', async () => {
     await seedProfile();
     renderSettings();
