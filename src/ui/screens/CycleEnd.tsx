@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { suggestProgression, estimate1RM, LIFT_ORDER } from '../../domain';
 import type { LiftKey, ProgressionDecision } from '../../domain';
 import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
-import type { Cycle, Lift, Session } from '../../data/repositories';
+import type { Cycle, Lift, Session, LoggedSet } from '../../data/repositories';
+import { useSettings } from '../settings/SettingsContext';
 
 const LIFT_NAMES: Record<LiftKey, string> = {
   press: 'Overhead Press',
@@ -28,6 +29,7 @@ interface LiftRow {
   topSetCompleted: boolean;
   amrapWeight: number | null;
   amrapReps: number | null;
+  topReps: number | null;
   rpe: number;
   decision: ProgressionDecision;
   newTm: number;
@@ -48,6 +50,19 @@ function amrapWeightFor(session: Session | undefined): number | null {
   return amrapSet ? amrapSet.weight : null;
 }
 
+/** The top main set = the highest-weight set with kind==='main'. Works for both
+ * base (AMRAP top set) and 5s-PRO (straight-5 top set, no AMRAP). */
+function topMainSet(session: Session | undefined): LoggedSet | undefined {
+  return session?.sets
+    .filter((s) => s.kind === 'main')
+    .reduce<LoggedSet | undefined>((top, s) => (!top || s.weight > top.weight ? s : top), undefined);
+}
+
+function topSetCompletedFor(session: Session | undefined): boolean {
+  const top = topMainSet(session);
+  return !!top && top.done && (top.actualReps ?? 0) >= 1;
+}
+
 function suggestFor(row: {
   topSetCompleted: boolean;
   currentTm: number;
@@ -64,6 +79,7 @@ function suggestFor(row: {
 
 export default function CycleEnd() {
   const navigate = useNavigate();
+  const { settings } = useSettings();
   const [loaded, setLoaded] = useState<LoadedCycleEnd | null | undefined>(undefined);
   const [applying, setApplying] = useState(false);
 
@@ -85,7 +101,7 @@ export default function CycleEnd() {
       const rows: LiftRow[] = LIFT_ORDER.map((liftKey) => {
         const lift = lifts.find((l) => l.key === liftKey) as Lift | undefined;
         const session = findWeek3Session(sessions, liftKey);
-        const topSetCompleted = (session?.amrapReps ?? 0) >= 1;
+        const topSetCompleted = topSetCompletedFor(session);
         const rpe = session?.rpe ?? DEFAULT_RPE;
         const currentTm = cycle.tm[liftKey];
         const increment = lift?.increment ?? 0;
@@ -99,6 +115,7 @@ export default function CycleEnd() {
           topSetCompleted,
           amrapWeight: amrapWeightFor(session),
           amrapReps: session?.amrapReps ?? null,
+          topReps: topMainSet(session)?.actualReps ?? null,
           rpe,
           decision: suggestion.decision,
           newTm: suggestion.newTm,
@@ -158,8 +175,8 @@ export default function CycleEnd() {
       index: loaded.cycle.index + 1,
       startedAt: new Date().toISOString(),
       status: 'active',
-      template: loaded.cycle.template,
-      fivesPro: loaded.cycle.fivesPro,
+      template: settings.template.selected,
+      fivesPro: settings.template.fivesPro,
       tm,
     });
 
@@ -220,7 +237,7 @@ export default function CycleEnd() {
                 </div>
 
                 <div className="mt-1.5 text-[13px] text-[var(--muted)]">
-                  Week 3 top set: {row.topSetCompleted ? `${row.amrapReps} reps` : 'missed'}
+                  Week 3 top set: {row.topSetCompleted ? `${row.topReps} reps` : 'missed'}
                   {estimated != null && <> · est. 1RM {Math.round(estimated)}</>}
                 </div>
 
