@@ -1,0 +1,340 @@
+import { useEffect, useRef, useState } from 'react';
+import { buildWorkout, computePlates, estimate1RM } from '../../domain';
+import type { LiftKey, SetKind, Unit, WeekNumber, WorkingSet } from '../../domain';
+import { sessionRepo } from '../../data/repositories';
+import type { Cycle, LoggedSet, Session } from '../../data/repositories';
+import type { SettingsState } from '../../settings/schema';
+import ExerciseDemo from './ExerciseDemo';
+import SupportingLifts from './SupportingLifts';
+
+export interface LiftCardProps {
+  liftKey: LiftKey;
+  week: WeekNumber;
+  cycle: Cycle;
+  unit: Unit;
+  roundingIncrement: number;
+  dayNumber: number;
+  settings: SettingsState;
+  onLogged?: () => void;
+}
+
+const LIFT_NAMES: Record<LiftKey, string> = {
+  press: 'Overhead Press',
+  bench: 'Bench Press',
+  squat: 'Squat',
+  deadlift: 'Deadlift',
+};
+
+const KIND_LABEL: Record<SetKind, string> = {
+  warmup: 'warm-up',
+  main: 'work',
+  supplemental: 'supplemental',
+};
+
+const BAR_WEIGHT: Record<Unit, number> = { kg: 20, lb: 45 };
+const PLATE_SET: Record<Unit, number[]> = {
+  kg: [25, 20, 15, 10, 5, 2.5, 1.25],
+  lb: [45, 35, 25, 10, 5, 2.5],
+};
+
+interface RowState {
+  set: WorkingSet;
+  done: boolean;
+  actualReps: number;
+  /** 1-based position of this set within its own kind (e.g. 2nd warm-up). */
+  kindIndex: number;
+}
+
+function withKindIndex(sets: WorkingSet[]): RowState[] {
+  const counts: Record<SetKind, number> = { warmup: 0, main: 0, supplemental: 0 };
+  return sets.map((set) => {
+    counts[set.kind] += 1;
+    return { set, done: false, actualReps: set.reps, kindIndex: counts[set.kind] };
+  });
+}
+
+/** Per-side plate breakdown, e.g. "5 · 1.25", or "empty bar" when the bar alone suffices. */
+function formatPlates(weight: number, unit: Unit): string {
+  const { perSide, leftover } = computePlates(weight, BAR_WEIGHT[unit], PLATE_SET[unit]);
+  if (perSide.length === 0) return 'empty bar';
+  const parts = perSide.flatMap((p) => Array<string>(p.count).fill(String(p.plate)));
+  const base = parts.join(' · ');
+  return leftover > 0 ? `${base} (+${leftover} left over)` : base;
+}
+
+/**
+ * A single lift's full cycle-overview card: header (name / day / training
+ * max), the prescribed set table with per-set plate breakdowns and an
+ * AMRAP-highlighted top set, and inline logging that saves a Session once
+ * every main work set is marked done. Collapsed exercise-demo and
+ * supporting-lifts panels are embedded per settings.
+ */
+export default function LiftCard({
+  liftKey,
+  week,
+  cycle,
+  unit,
+  roundingIncrement,
+  dayNumber,
+  settings,
+  onLogged,
+}: LiftCardProps) {
+  const [rows, setRows] = useState<RowState[]>([]);
+  const [rowsForRef, setRowsForRef] = useState<string | null>(null);
+
+  // Optimistically assume no session exists yet (shows the interactive table
+  // immediately, with no loading gate); the mount effect below corrects this
+  // to the real logged session, if any, once the async lookup resolves.
+  const [existingSession, setExistingSession] = useState<Session | null>(null);
+  const savingRef = useRef(false);
+
+  const workoutKey = `${liftKey}:${week}:${cycle.id ?? 'x'}:${cycle.tm[liftKey]}:${settings.template.warmups}`;
+  if (workoutKey !== rowsForRef) {
+    setRows(
+      withKindIndex(
+        buildWorkout({
+          tm: cycle.tm[liftKey],
+          week,
+          template: cycle.template,
+          fivesPro: cycle.fivesPro,
+          warmups: settings.template.warmups,
+          roundingIncrement,
+        }),
+      ),
+    );
+    setRowsForRef(workoutKey);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    savingRef.current = false;
+
+    async function check() {
+      if (cycle.id == null) {
+        if (!cancelled) setExistingSession(null);
+        return;
+      }
+      const sessions = await sessionRepo.forCycle(cycle.id);
+      if (cancelled) return;
+      const found =
+        sessions.find((s) => s.status === 'done' && s.liftKey === liftKey && s.week === week) ?? null;
+      setExistingSession(found);
+    }
+
+    void check();
+    return () => {
+      cancelled = true;
+    };
+  }, [cycle.id, liftKey, week]);
+
+  async function save() {
+    const sets: LoggedSet[] = rows.map((r) => ({
+      targetReps: r.set.reps,
+      weight: r.set.weight,
+      actualReps: r.done ? r.actualReps : null,
+      done: r.done,
+      isAmrap: r.set.isAmrap,
+      kind: r.set.kind,
+    }));
+
+    const amrapRow = rows.find((r) => r.set.isAmrap);
+    const amrapReps = amrapRow?.done ? amrapRow.actualReps : null;
+    const estimated1RM = amrapRow && amrapReps != null ? estimate1RM(amrapRow.set.weight, amrapReps) : null;
+
+    const newSession: Session = {
+      cycleId: cycle.id as number,
+      week,
+      liftKey,
+      date: new Date().toISOString(),
+      status: 'done',
+      sets,
+      amrapReps,
+      estimated1RM,
+      rpe: null,
+      notes: '',
+    };
+
+    const id = await sessionRepo.add(newSession);
+    setExistingSession({ ...newSession, id });
+    onLogged?.();
+  }
+
+  // Auto-save the moment every main ("work") set is marked done.
+  useEffect(() => {
+    if (existingSession !== null) return;
+    if (savingRef.current) return;
+    const mainRows = rows.filter((r) => r.set.kind === 'main');
+    if (mainRows.length === 0 || !mainRows.every((r) => r.done)) return;
+    savingRef.current = true;
+    void save();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, existingSession]);
+
+  function toggleDone(index: number) {
+    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, done: !r.done } : r)));
+  }
+
+  function changeReps(index: number, reps: number) {
+    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, actualReps: reps } : r)));
+  }
+
+  const tm = cycle.tm[liftKey];
+
+  return (
+    <section className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4">
+      <header className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-extrabold leading-tight">{LIFT_NAMES[liftKey]}</h2>
+          <div className="text-[12px] font-semibold text-[var(--muted)]">Day {dayNumber}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--muted)]">
+            training max
+          </div>
+          <div className="text-sm font-extrabold tabular-nums">
+            {tm} {unit}
+          </div>
+        </div>
+      </header>
+
+      {existingSession != null && (
+        <div className="flex items-center justify-between gap-2 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3 py-2.5 text-[13px] font-bold text-[var(--muted)]">
+          <span>
+            <span aria-hidden="true">✓</span> Logged this week
+          </span>
+          {existingSession.amrapReps != null && (
+            <span className="tabular-nums">
+              {existingSession.amrapReps} reps
+              {existingSession.estimated1RM != null &&
+                ` · est. 1RM ${Math.round(existingSession.estimated1RM)} ${unit}`}
+            </span>
+          )}
+        </div>
+      )}
+
+      {existingSession === null && (
+        <ul className="flex flex-col gap-2 list-none p-0 m-0">
+          {rows.map((row, index) => {
+            const { set, done, actualReps, kindIndex } = row;
+            const rowLabel = `${KIND_LABEL[set.kind]} set ${kindIndex} (${set.weight}${unit})`;
+            const pct = Math.round(set.pct * 100);
+            const plateText = formatPlates(set.weight, unit);
+
+            if (set.isAmrap) {
+              return (
+                <li
+                  key={index}
+                  className={
+                    'rounded-[var(--r-hero)] p-4 transition-colors ' +
+                    (done
+                      ? 'bg-[var(--surface-2)] text-[var(--text)]'
+                      : 'bg-[var(--accent)] text-[var(--on-accent)]')
+                  }
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-16 flex-none">
+                      <div className="text-[13px] font-bold">{KIND_LABEL[set.kind]}</div>
+                      <div className="text-[12px] font-semibold opacity-80">{pct}%</div>
+                    </div>
+                    <div className="flex flex-1 items-baseline justify-center gap-1">
+                      <span className="text-[40px] font-extrabold leading-none tabular-nums">
+                        {set.weight}
+                      </span>
+                      <span className="text-[13px] font-bold">{unit}</span>
+                    </div>
+                    <div className="flex-none text-right">
+                      <div className="text-[17px] font-extrabold tabular-nums">×{set.reps}+</div>
+                      <div className="text-[11px] font-bold opacity-80">{plateText}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-1 text-[12.5px] font-bold">as many reps as possible</div>
+
+                  {done ? (
+                    <div className="mt-2.5 flex items-center justify-between text-[13px] font-bold">
+                      <span>Logged {actualReps} reps</span>
+                      <button type="button" onClick={() => toggleDone(index)} className="underline underline-offset-2">
+                        Edit
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex items-center gap-2">
+                      <label htmlFor="amrap-reps-done" className="text-[13px] font-bold">
+                        Reps done
+                      </label>
+                      <input
+                        id="amrap-reps-done"
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        aria-label="Reps done"
+                        value={actualReps}
+                        onChange={(e) => changeReps(index, Number(e.target.value) || 0)}
+                        className="w-16 rounded-lg bg-[var(--overlay-on-accent)] px-2 py-1.5 text-center font-bold text-inherit outline-none appearance-none [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleDone(index)}
+                        aria-label={`Mark ${rowLabel} AMRAP set done`}
+                        className="ml-auto rounded-[var(--r-pill)] bg-[var(--overlay-on-accent)] px-3.5 py-1.5 text-[13px] font-extrabold"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            }
+
+            return (
+              <li
+                key={index}
+                className={
+                  'flex items-center gap-3 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3.5 py-3 transition-opacity ' +
+                  (done ? 'opacity-60' : '')
+                }
+              >
+                <div className="w-16 flex-none">
+                  <div className="text-[13px] font-bold">{KIND_LABEL[set.kind]}</div>
+                  <div className="text-[12px] font-semibold text-[var(--muted)]">{pct}%</div>
+                </div>
+                <div className="flex flex-1 items-baseline justify-center gap-1">
+                  <span className="text-[26px] font-extrabold tabular-nums">{set.weight}</span>
+                  <span className="text-[12px] font-semibold text-[var(--muted)]">{unit}</span>
+                </div>
+                <div className="flex-none text-right">
+                  <div className="text-[15px] font-extrabold tabular-nums">×{set.reps}</div>
+                  <div className="text-[11px] font-semibold text-[var(--muted)]">{plateText}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleDone(index)}
+                  aria-pressed={done}
+                  aria-label={`Mark ${rowLabel} done`}
+                  className={
+                    'grid h-[22px] w-[22px] flex-none place-items-center rounded-full text-xs font-extrabold ' +
+                    (done ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--line)] text-transparent')
+                  }
+                >
+                  ✓
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {settings.exerciseDemos && (
+        <div className="mt-3">
+          <ExerciseDemo liftKey={liftKey} />
+        </div>
+      )}
+
+      {settings.assistanceTracking && (
+        <div className="mt-3">
+          <SupportingLifts liftKey={liftKey} tm={tm} unit={unit} roundingIncrement={roundingIncrement} />
+        </div>
+      )}
+    </section>
+  );
+}
