@@ -9,6 +9,7 @@ import { useSettings } from '../settings/SettingsContext';
 import { useRestTimer } from '../hooks/useRestTimer';
 import SetRow from '../components/SetRow';
 import ExerciseDemo from '../components/ExerciseDemo';
+import AssistanceSection from '../components/AssistanceSection';
 
 const TEMPLATE_LABEL: Record<TemplateKey, string> = {
   base: '5/3/1 week',
@@ -455,6 +456,8 @@ export default function Home() {
             {saved ? 'Saved ✓' : 'Save workout'}
           </button>
         )}
+
+        {settings.assistanceTracking && <AssistanceSection />}
 
         <nav className="mt-5 flex items-center justify-around text-xs font-bold text-[var(--muted)]">
           <span className="text-[var(--accent)]">Today</span>

@@ -394,6 +394,32 @@ describe('Home — running rest timer', () => {
   });
 });
 
+describe('Home — assistance tracking', () => {
+  it('shows the Assistance section when assistanceTracking is on (default)', async () => {
+    await seed();
+    renderHome();
+
+    await screen.findByRole('heading', { name: 'Overhead Press' });
+
+    expect(await screen.findByRole('heading', { name: /assistance/i })).toBeTruthy();
+  });
+
+  it('hides the Assistance section when assistanceTracking is off', async () => {
+    await seed();
+    await settingsRepo.save({ ...defaultSettings, assistanceTracking: false });
+    renderHome();
+
+    await screen.findByRole('heading', { name: 'Overhead Press' });
+
+    // SettingsProvider starts with defaultSettings (assistanceTracking: true)
+    // and only reflects the saved value once its mount-time load resolves,
+    // so assert via waitFor rather than a synchronous query.
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: /assistance/i })).toBeNull();
+    });
+  });
+});
+
 describe('Home — exercise demos', () => {
   it('shows the "How to perform" affordance when exerciseDemos is enabled', async () => {
     await seed();
