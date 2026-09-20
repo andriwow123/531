@@ -16,3 +16,4 @@ export type { OneRmPoint, TmPoint, PR, CycleLogEntry, CycleLogGroup } from './hi
 export { EXERCISE_DEMOS, getExerciseDemo } from './exercises';
 export type { ExerciseDemo } from './exercises';
 export { bodyweightSeries, latestWeight } from './bodyweight';
+export { ASSISTANCE_CATALOG, exerciseOptions } from './assistanceCatalog';

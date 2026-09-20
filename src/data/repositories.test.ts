@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from './db';
-import { profileRepo, liftRepo, cycleRepo, sessionRepo, settingsRepo, bodyweightRepo } from './repositories';
+import {
+  profileRepo,
+  liftRepo,
+  cycleRepo,
+  sessionRepo,
+  settingsRepo,
+  bodyweightRepo,
+  assistanceRepo,
+  customExerciseRepo,
+} from './repositories';
 import type { Cycle, Session } from './repositories';
 import { defaultSettings } from '../settings/schema';
 
@@ -101,5 +110,26 @@ describe('bodyweightRepo', () => {
     await bodyweightRepo.add({ date: '2026-02-01', weight: 82.5 });
     await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
     expect(await bodyweightRepo.all()).toHaveLength(2);
+  });
+});
+describe('assistanceRepo', () => {
+  it('adds entries for a date and lists them via forDate', async () => {
+    await assistanceRepo.add({ date: '2026-02-01', category: 'push', name: 'Dips', sets: 3, reps: 10, weight: null });
+    await assistanceRepo.add({ date: '2026-02-01', category: 'pull', name: 'Barbell Row', sets: 3, reps: 8, weight: 60 });
+    await assistanceRepo.add({ date: '2026-02-02', category: 'legs', name: 'Leg Press', sets: 4, reps: 12, weight: 100 });
+
+    const forDay = await assistanceRepo.forDate('2026-02-01');
+    expect(forDay).toHaveLength(2);
+    expect(forDay.map((e) => e.name).sort()).toEqual(['Barbell Row', 'Dips']);
+
+    expect(await assistanceRepo.all()).toHaveLength(3);
+  });
+});
+describe('customExerciseRepo', () => {
+  it('adds a custom exercise and lists it via all', async () => {
+    await customExerciseRepo.add({ category: 'push', name: 'JM Press' });
+    const all = await customExerciseRepo.all();
+    expect(all).toHaveLength(1);
+    expect(all[0].name).toBe('JM Press');
   });
 });
