@@ -13,3 +13,5 @@ export { nextUp, LIFT_ORDER } from './schedule';
 export type { LoggedSession } from './schedule';
 export { estimatedOneRmSeries, trainingMaxSeries, personalRecord, cycleLog } from './history';
 export type { OneRmPoint, TmPoint, PR, CycleLogEntry, CycleLogGroup } from './history';
+export { EXERCISE_DEMOS, getExerciseDemo } from './exercises';
+export type { ExerciseDemo } from './exercises';
