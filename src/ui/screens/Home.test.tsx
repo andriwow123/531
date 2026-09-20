@@ -2,15 +2,26 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { db } from '../../data/db';
-import { profileRepo, liftRepo, cycleRepo, sessionRepo } from '../../data/repositories';
+import { profileRepo, liftRepo, cycleRepo, sessionRepo, settingsRepo } from '../../data/repositories';
 import { estimate1RM } from '../../domain';
 import { defaultSettings } from '../../settings/schema';
+import { SettingsProvider } from '../settings/SettingsContext';
 import Home from './Home';
 
 beforeEach(async () => {
   await db.delete();
   await db.open();
 });
+
+function renderHome() {
+  return render(
+    <SettingsProvider>
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>
+    </SettingsProvider>,
+  );
+}
 
 async function seed() {
   await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
@@ -36,11 +47,7 @@ async function seed() {
 describe('Home', () => {
   it('shows the current lift and its three main set weights', async () => {
     await seed();
-    render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>,
-    );
+    renderHome();
 
     // Week 1 has no sessions logged yet -> nextUp is press.
     expect(await screen.findByRole('heading', { name: 'Overhead Press' })).toBeTruthy();
@@ -53,11 +60,7 @@ describe('Home', () => {
 
   it('renders all 4 lifts as selectable chips, pre-selecting the suggested lift', async () => {
     await seed();
-    render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>,
-    );
+    renderHome();
 
     await screen.findByRole('heading', { name: 'Overhead Press' });
 
@@ -76,11 +79,7 @@ describe('Home', () => {
 
   it('changes the shown set weights when a different lift is selected', async () => {
     await seed();
-    render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>,
-    );
+    renderHome();
 
     // Default view is press (TM 100): week 1 top set is 85.
     await screen.findByRole('heading', { name: 'Overhead Press' });
@@ -109,11 +108,7 @@ describe('Home', () => {
       notes: '',
     });
 
-    render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>,
-    );
+    renderHome();
 
     // nextUp now suggests bench (press done in week 1); it becomes selected.
     await screen.findByRole('heading', { name: 'Bench Press' });
@@ -149,11 +144,7 @@ describe('Home', () => {
       tm: { press: 100, bench: 100, squat: 100, deadlift: 100 },
     });
 
-    render(
-      <MemoryRouter>
-        <Home settings={defaultSettings} />
-      </MemoryRouter>,
-    );
+    renderHome();
 
     await screen.findByRole('heading', { name: 'Overhead Press' });
 
@@ -164,11 +155,7 @@ describe('Home', () => {
 
   it('logs a session with sets and a stored estimated1RM on Save', async () => {
     const cycleId = await seed();
-    render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>,
-    );
+    renderHome();
 
     await screen.findByRole('heading', { name: 'Overhead Press' });
 
@@ -209,11 +196,8 @@ describe('Home', () => {
 
   it('keeps a completed warm-up row visible when hideCompletedWarmups is false', async () => {
     await seed();
-    render(
-      <MemoryRouter>
-        <Home settings={{ ...defaultSettings, hideCompletedWarmups: false }} />
-      </MemoryRouter>,
-    );
+    await settingsRepo.save({ ...defaultSettings, hideCompletedWarmups: false });
+    renderHome();
 
     await screen.findByRole('heading', { name: 'Overhead Press' });
     fireEvent.click(screen.getByLabelText('Mark warm-up set 1 (40kg) done'));
@@ -223,11 +207,8 @@ describe('Home', () => {
 
   it('hides a completed warm-up row once marked done when hideCompletedWarmups is true', async () => {
     await seed();
-    render(
-      <MemoryRouter>
-        <Home settings={{ ...defaultSettings, hideCompletedWarmups: true }} />
-      </MemoryRouter>,
-    );
+    await settingsRepo.save({ ...defaultSettings, hideCompletedWarmups: true });
+    renderHome();
 
     await screen.findByRole('heading', { name: 'Overhead Press' });
     // Still visible before it's marked done.
@@ -256,11 +237,7 @@ describe('Home', () => {
       });
     }
 
-    render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>,
-    );
+    renderHome();
 
     // Week 4 (deload) for press: warm-ups are 40/50/60% of TM and so are the
     // three main sets, at the same TM=100 -> both land on 40/50/60kg.
@@ -281,11 +258,7 @@ describe('Home', () => {
 
   it('labels warm-up rows with a "Warm-up" badge', async () => {
     await seed();
-    render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>,
-    );
+    renderHome();
 
     await screen.findByRole('heading', { name: 'Overhead Press' });
     // base template week 1: 3 warm-up rows, each carrying the badge.
@@ -294,11 +267,7 @@ describe('Home', () => {
 
   it('keeps the notes textarea collapsed until "Add note" is clicked', async () => {
     await seed();
-    render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>,
-    );
+    renderHome();
 
     await screen.findByRole('heading', { name: 'Overhead Press' });
     expect(screen.queryByLabelText('Notes')).toBeNull();
@@ -327,14 +296,94 @@ describe('Home', () => {
     }
 
     render(
-      <MemoryRouter initialEntries={['/']}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/cycle-end" element={<div>Cycle end screen</div>} />
-        </Routes>
-      </MemoryRouter>,
+      <SettingsProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/cycle-end" element={<div>Cycle end screen</div>} />
+          </Routes>
+        </MemoryRouter>
+      </SettingsProvider>,
     );
 
     expect(await screen.findByText('Cycle end screen')).toBeTruthy();
+  });
+});
+
+describe('Home — live display settings', () => {
+  it('shows plate breakdown and notes controls when displayPreset is detailed', async () => {
+    await seed();
+    await settingsRepo.save({ ...defaultSettings, displayPreset: 'detailed' });
+    renderHome();
+
+    await screen.findByRole('heading', { name: 'Overhead Press' });
+    expect(await screen.findByText('Per side')).toBeTruthy();
+    expect(screen.getByText('+ Add note')).toBeTruthy();
+  });
+
+  it('hides plate breakdown and notes controls when displayPreset is simple', async () => {
+    await seed();
+    await settingsRepo.save({ ...defaultSettings, displayPreset: 'simple' });
+    renderHome();
+
+    await screen.findByRole('heading', { name: 'Overhead Press' });
+    await waitFor(() => {
+      expect(screen.queryByText('Per side')).toBeNull();
+      expect(screen.queryByText('+ Add note')).toBeNull();
+    });
+  });
+});
+
+describe('Home — running rest timer', () => {
+  it('renders the configured seconds when enabled and the display allows it, and Start begins the countdown', async () => {
+    await seed();
+    await settingsRepo.save({
+      ...defaultSettings,
+      restTimer: { enabled: true, defaultSeconds: 90, notify: false },
+    });
+    renderHome();
+
+    await screen.findByRole('heading', { name: 'Overhead Press' });
+    expect(await screen.findByText('1:30')).toBeTruthy();
+
+    const startButton = screen.getByRole('button', { name: 'Start' });
+    const pauseButton = screen.getByRole('button', { name: 'Pause' });
+    expect(startButton).not.toBeDisabled();
+    expect(pauseButton).toBeDisabled();
+
+    fireEvent.click(startButton);
+
+    expect(startButton).toBeDisabled();
+    expect(pauseButton).not.toBeDisabled();
+  });
+
+  it('does not render the rest-timer widget when restTimer.enabled is false', async () => {
+    await seed();
+    await settingsRepo.save({
+      ...defaultSettings,
+      restTimer: { enabled: false, defaultSeconds: 90, notify: false },
+    });
+    renderHome();
+
+    await screen.findByRole('heading', { name: 'Overhead Press' });
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
+    });
+  });
+
+  it('does not render the rest-timer widget when the display preset hides it', async () => {
+    await seed();
+    await settingsRepo.save({
+      ...defaultSettings,
+      displayPreset: 'simple',
+      displayOverrides: {},
+      restTimer: { enabled: true, defaultSeconds: 90, notify: false },
+    });
+    renderHome();
+
+    await screen.findByRole('heading', { name: 'Overhead Press' });
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
+    });
   });
 });

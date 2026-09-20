@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { buildWorkout, computePlates, estimate1RM, nextUp, LIFT_ORDER } from '../../domain';
 import type { LiftKey, SetKind, TemplateKey, Unit, WeekNumber, WorkingSet } from '../../domain';
 import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, Lift, LoggedSet, Session } from '../../data/repositories';
-import { defaultSettings } from '../../settings/schema';
-import type { SettingsState } from '../../settings/schema';
 import { resolveDisplay } from '../../settings/display';
+import { useSettings } from '../settings/SettingsContext';
+import { useRestTimer } from '../hooks/useRestTimer';
 import SetRow from '../components/SetRow';
 
 const TEMPLATE_LABEL: Record<TemplateKey, string> = {
@@ -65,14 +65,33 @@ interface LoadedData {
   sessions: Session[];
 }
 
-export interface HomeProps {
-  /** Overridable for tests. Defaults to the shared `defaultSettings` constant. */
-  settings?: SettingsState;
+/** mm:ss, zero-padded seconds. */
+function formatDuration(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-export default function Home({ settings = defaultSettings }: HomeProps = {}) {
+export default function Home() {
+  const { settings } = useSettings();
   const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
   const navigate = useNavigate();
+  const restTimer = useRestTimer(settings.restTimer.defaultSeconds);
+
+  // Fires a browser notification the moment the rest timer's running->0
+  // transition happens (i.e. it actually completed, not a manual pause or
+  // reset). Guarded on Notifications API availability + permission; never
+  // prompts, and no-ops when unavailable/denied/disabled.
+  const wasRunningRef = useRef(restTimer.running);
+  useEffect(() => {
+    const wasRunning = wasRunningRef.current;
+    wasRunningRef.current = restTimer.running;
+    if (!wasRunning || restTimer.running || restTimer.secondsLeft !== 0) return;
+    if (!settings.restTimer.notify) return;
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    new Notification('Rest complete', { body: 'Time for your next set.' });
+  }, [restTimer.running, restTimer.secondsLeft, settings.restTimer.notify]);
 
   const [data, setData] = useState<LoadedData | null | undefined>(undefined);
   const [selectedLift, setSelectedLift] = useState<LiftKey | null>(null);
@@ -276,10 +295,6 @@ export default function Home({ settings = defaultSettings }: HomeProps = {}) {
       ({ row }) => !(settings.hideCompletedWarmups && row.set.kind === 'warmup' && row.done),
     );
 
-  const restLabel = `${Math.floor(settings.restTimer.defaultSeconds / 60)}:${String(
-    settings.restTimer.defaultSeconds % 60,
-  ).padStart(2, '0')}`;
-
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
       <div className="w-full max-w-md pb-4">
@@ -362,8 +377,36 @@ export default function Home({ settings = defaultSettings }: HomeProps = {}) {
         </ul>
 
         {display.restTimer && settings.restTimer.enabled && (
-          <div className="mt-3 rounded-[var(--r-card)] bg-[var(--surface-2)] py-3 text-center text-sm font-bold">
-            Rest timer · <span className="text-[var(--accent)]">{restLabel}</span>
+          <div className="mt-3 rounded-[var(--r-card)] bg-[var(--surface-2)] p-3 text-center">
+            <div className="text-sm font-bold">
+              Rest timer ·{' '}
+              <span className="text-[var(--accent)]">{formatDuration(restTimer.secondsLeft)}</span>
+            </div>
+            <div className="mt-2 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={restTimer.start}
+                disabled={restTimer.running}
+                className="rounded-[var(--r-pill)] bg-[var(--accent)] px-4 py-1.5 text-[12px] font-extrabold text-[var(--on-accent)] disabled:opacity-50"
+              >
+                Start
+              </button>
+              <button
+                type="button"
+                onClick={restTimer.pause}
+                disabled={!restTimer.running}
+                className="rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface)] px-4 py-1.5 text-[12px] font-extrabold text-[var(--text)] disabled:opacity-50"
+              >
+                Pause
+              </button>
+              <button
+                type="button"
+                onClick={restTimer.reset}
+                className="rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface)] px-4 py-1.5 text-[12px] font-extrabold text-[var(--text)]"
+              >
+                Reset
+              </button>
+            </div>
           </div>
         )}
 
