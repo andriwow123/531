@@ -110,6 +110,24 @@ describe('Settings', () => {
     await waitFor(async () => expect((await settingsRepo.get()).bodyweightTracking).toBe(false));
   });
 
+  it('toggling Assistance tracking persists assistanceTracking', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    // SettingsProvider seeds state with defaultSettings and only reflects the
+    // loaded settings once its mount-time load resolves; wait for the switch
+    // to land in its loaded (checked, per defaultSettings.assistanceTracking=true)
+    // state before clicking, to avoid racing the load (see notify tests above).
+    const assistanceTrackingSwitch = await screen.findByRole('switch', { name: /assistance tracking/i });
+    await waitFor(() => expect(assistanceTrackingSwitch).toBeChecked());
+
+    fireEvent.click(assistanceTrackingSwitch);
+
+    await waitFor(async () => expect((await settingsRepo.get()).assistanceTracking).toBe(false));
+  });
+
   it('shows units and Training Max % read-only with an onboarding note', async () => {
     await seedProfile();
     renderSettings();

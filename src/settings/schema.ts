@@ -15,6 +15,7 @@ export interface SettingsState {
   /** When true, Home shows an expandable "How to perform" demo for the selected lift. */
   exerciseDemos: boolean;
   bodyweightTracking: boolean;
+  assistanceTracking: boolean;
 }
 
 export const defaultSettings: SettingsState = {
@@ -28,4 +29,5 @@ export const defaultSettings: SettingsState = {
   theme: 'system',
   exerciseDemos: true,
   bodyweightTracking: true,
+  assistanceTracking: true,
 };
