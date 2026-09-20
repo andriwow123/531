@@ -14,6 +14,7 @@ export interface SettingsState {
   theme: 'dark' | 'light' | 'system';
   /** When true, Home shows an expandable "How to perform" demo for the selected lift. */
   exerciseDemos: boolean;
+  bodyweightTracking: boolean;
 }
 
 export const defaultSettings: SettingsState = {
@@ -26,4 +27,5 @@ export const defaultSettings: SettingsState = {
   hideCompletedWarmups: false,
   theme: 'system',
   exerciseDemos: true,
+  bodyweightTracking: true,
 };

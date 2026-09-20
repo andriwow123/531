@@ -297,6 +297,11 @@ export default function Settings() {
               checked={settings.exerciseDemos}
               onChange={() => updateSettings({ exerciseDemos: !settings.exerciseDemos })}
             />
+            <ToggleRow
+              label="Bodyweight tracking"
+              checked={settings.bodyweightTracking}
+              onChange={() => updateSettings({ bodyweightTracking: !settings.bodyweightTracking })}
+            />
           </Section>
 
           <Section title="Templates">
