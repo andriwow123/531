@@ -346,7 +346,7 @@ export default function Home() {
             </div>
             <h1 className="text-[26px] font-extrabold leading-tight">{liftName(selectedLift)}</h1>
             <div className="text-[12.5px] font-bold text-[var(--accent)]">
-              {TEMPLATE_LABEL[settings.template.selected]}
+              {TEMPLATE_LABEL[data.cycle.template]}
             </div>
           </div>
         </header>

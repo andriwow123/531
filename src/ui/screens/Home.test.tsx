@@ -151,6 +151,12 @@ describe('Home', () => {
     // base template would be 3 warm-ups + 3 main sets = 6 rows;
     // bbb adds 5 supplemental sets at 50% TM = 11 rows.
     expect(screen.getAllByRole('listitem')).toHaveLength(11);
+
+    // The header label must reflect the cycle's own template snapshot
+    // ('bbb' -> "Boring But Big"), not live settings (which default to
+    // 'base' -> "5/3/1 week") — template changes apply to the NEXT cycle.
+    expect(screen.getByText('Boring But Big')).toBeTruthy();
+    expect(screen.queryByText('5/3/1 week')).toBeNull();
   });
 
   it('logs a session with sets and a stored estimated1RM on Save', async () => {

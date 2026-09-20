@@ -228,6 +228,22 @@ export default function Settings() {
     await profileRepo.save(updated);
   }
 
+  // Turning the notify switch ON is the user gesture that lets us ask for
+  // browser notification permission — without it, the "Notify when rest
+  // ends" toggle would persist a preference that can never actually fire.
+  // Fire-and-forget: we don't block the toggle on the user's answer, and we
+  // persist the preference regardless of what they choose. Never requested
+  // on load or when turning the switch OFF.
+  function toggleNotify() {
+    const next = !settings.restTimer.notify;
+    if (next && typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        void Notification.requestPermission();
+      }
+    }
+    updateSettings({ restTimer: { ...settings.restTimer, notify: next } });
+  }
+
   function changeRestSeconds(dir: 1 | -1) {
     const next = Math.min(
       REST_SECONDS_MAX,
@@ -321,9 +337,7 @@ export default function Settings() {
             <ToggleRow
               label="Notify when rest ends"
               checked={settings.restTimer.notify}
-              onChange={() =>
-                updateSettings({ restTimer: { ...settings.restTimer, notify: !settings.restTimer.notify } })
-              }
+              onChange={toggleNotify}
             />
           </Section>
 
