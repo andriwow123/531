@@ -11,6 +11,8 @@ import type { LiftKey, Unit } from '../../domain';
 import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, Lift, Session } from '../../data/repositories';
 import ProgressChart from '../components/ProgressChart';
+import BodyweightCard from '../components/BodyweightCard';
+import { useSettings } from '../settings/SettingsContext';
 
 const LIFT_NAMES: Record<LiftKey, string> = {
   press: 'Overhead Press',
@@ -38,6 +40,7 @@ interface LoadedData {
 }
 
 export default function History() {
+  const { settings } = useSettings();
   const [data, setData] = useState<LoadedData | undefined>(undefined);
 
   useEffect(() => {
@@ -89,6 +92,13 @@ export default function History() {
             <div className="text-xs font-semibold text-[var(--muted)]">History</div>
             <h1 className="text-[26px] font-extrabold leading-tight">Progress</h1>
           </header>
+
+          {settings.bodyweightTracking && (
+            <div className="mb-4">
+              <BodyweightCard />
+            </div>
+          )}
+
           <p className="text-sm text-[var(--muted)]">
             Log a few workouts and your progress shows up here.
           </p>
@@ -107,6 +117,12 @@ export default function History() {
           <div className="text-xs font-semibold text-[var(--muted)]">History</div>
           <h1 className="text-[26px] font-extrabold leading-tight">Progress</h1>
         </header>
+
+        {settings.bodyweightTracking && (
+          <div className="mb-4">
+            <BodyweightCard />
+          </div>
+        )}
 
         <ul className="flex flex-col gap-3 list-none p-0 m-0">
           {LIFT_ORDER.map((key) => {

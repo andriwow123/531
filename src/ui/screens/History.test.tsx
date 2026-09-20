@@ -1,14 +1,26 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { db } from '../../data/db';
-import { profileRepo, liftRepo, cycleRepo, sessionRepo } from '../../data/repositories';
+import { profileRepo, liftRepo, cycleRepo, sessionRepo, settingsRepo } from '../../data/repositories';
+import { defaultSettings } from '../../settings/schema';
+import { SettingsProvider } from '../settings/SettingsContext';
 import History from './History';
 
 beforeEach(async () => {
   await db.delete();
   await db.open();
 });
+
+function renderHistory() {
+  return render(
+    <SettingsProvider>
+      <MemoryRouter>
+        <History />
+      </MemoryRouter>
+    </SettingsProvider>,
+  );
+}
 
 async function seed() {
   await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
@@ -33,11 +45,7 @@ describe('History', () => {
   it('shows the empty-state prompt and bottom nav when no sessions are logged', async () => {
     await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
 
-    render(
-      <MemoryRouter>
-        <History />
-      </MemoryRouter>,
-    );
+    renderHistory();
 
     expect(await screen.findByText(/log a few workouts and your progress shows up here/i)).toBeTruthy();
     expect(screen.getByText('Today')).toBeTruthy();
@@ -63,11 +71,7 @@ describe('History', () => {
       notes: '',
     });
 
-    render(
-      <MemoryRouter>
-        <History />
-      </MemoryRouter>,
-    );
+    renderHistory();
 
     // A card for every lift in LIFT_ORDER, even lifts with no sessions.
     for (const name of ['Overhead Press', 'Bench Press', 'Squat', 'Deadlift']) {
@@ -100,16 +104,43 @@ describe('History', () => {
       notes: '',
     });
 
-    render(
-      <MemoryRouter>
-        <History />
-      </MemoryRouter>,
-    );
+    renderHistory();
 
     await screen.findByRole('heading', { name: 'Overhead Press' });
     expect(screen.getByText(/PR 106/)).toBeTruthy();
     // One "Est. 1RM" toggle button per lift card (chart renders unconditionally).
     expect(screen.getAllByRole('button', { name: /est\. 1rm/i }).length).toBe(4);
     expect(screen.getByText(/85 kg × 7/)).toBeTruthy();
+  });
+});
+
+describe('History — bodyweight card', () => {
+  it('shows the bodyweight card at the top when bodyweightTracking is on', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    // defaultSettings.bodyweightTracking is true; seed explicitly so the
+    // assertion doesn't depend on that default staying true.
+    await settingsRepo.save({ ...defaultSettings, bodyweightTracking: true });
+
+    renderHistory();
+
+    expect(await screen.findByText(/log a few workouts and your progress shows up here/i)).toBeTruthy();
+    expect(screen.getByText('Bodyweight')).toBeTruthy();
+    expect(screen.getByText(/log today/i)).toBeTruthy();
+  });
+
+  it('hides the bodyweight card when bodyweightTracking is off', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    await settingsRepo.save({ ...defaultSettings, bodyweightTracking: false });
+
+    renderHistory();
+
+    expect(await screen.findByText(/log a few workouts and your progress shows up here/i)).toBeTruthy();
+
+    // SettingsProvider seeds state with defaultSettings (bodyweightTracking:
+    // true) and only reflects the saved settings (false) once its mount-time
+    // load resolves, so assert via waitFor rather than a synchronous query.
+    await waitFor(() => {
+      expect(screen.queryByText('Bodyweight')).toBeNull();
+    });
   });
 });
