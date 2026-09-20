@@ -120,8 +120,11 @@ function Switch({
     >
       <span
         aria-hidden="true"
-        className="absolute top-0.5 block h-5 w-5 rounded-full bg-white transition-transform"
-        style={{ transform: checked ? 'translateX(22px)' : 'translateX(2px)' }}
+        className="absolute top-0.5 block h-5 w-5 rounded-full transition-transform"
+        style={{
+          background: 'var(--on-accent)',
+          transform: checked ? 'translateX(22px)' : 'translateX(2px)',
+        }}
       />
     </button>
   );

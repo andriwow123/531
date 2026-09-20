@@ -68,7 +68,7 @@ describe('Settings', () => {
     const before = await profileRepo.get();
     expect(before?.roundingIncrement).toBe(2.5);
 
-    fireEvent.click(screen.getByRole('button', { name: /increase rounding increment/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /increase rounding increment/i }));
 
     await waitFor(async () => expect((await profileRepo.get())?.roundingIncrement).toBe(5));
   });
