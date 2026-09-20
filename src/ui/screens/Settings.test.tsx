@@ -110,7 +110,7 @@ describe('Settings', () => {
     await waitFor(async () => expect((await settingsRepo.get()).bodyweightTracking).toBe(false));
   });
 
-  it('toggling Assistance tracking persists assistanceTracking', async () => {
+  it('toggling Supporting lifts persists assistanceTracking', async () => {
     await seedProfile();
     renderSettings();
 
@@ -120,12 +120,22 @@ describe('Settings', () => {
     // loaded settings once its mount-time load resolves; wait for the switch
     // to land in its loaded (checked, per defaultSettings.assistanceTracking=true)
     // state before clicking, to avoid racing the load (see notify tests above).
-    const assistanceTrackingSwitch = await screen.findByRole('switch', { name: /assistance tracking/i });
-    await waitFor(() => expect(assistanceTrackingSwitch).toBeChecked());
+    const supportingLiftsSwitch = await screen.findByRole('switch', { name: /supporting lifts/i });
+    await waitFor(() => expect(supportingLiftsSwitch).toBeChecked());
 
-    fireEvent.click(assistanceTrackingSwitch);
+    fireEvent.click(supportingLiftsSwitch);
 
     await waitFor(async () => expect((await settingsRepo.get()).assistanceTracking).toBe(false));
+  });
+
+  it('does not render a Plate breakdown toggle', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(screen.queryByText('Plate breakdown')).toBeNull();
+    expect(screen.queryByRole('switch', { name: /plate breakdown/i })).toBeNull();
   });
 
   it('shows units and Training Max % read-only with an onboarding note', async () => {

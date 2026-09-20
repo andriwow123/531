@@ -4,6 +4,7 @@ import type { LiftKey, SetKind, Unit, WeekNumber, WorkingSet } from '../../domai
 import { sessionRepo } from '../../data/repositories';
 import type { Cycle, LoggedSet, Session } from '../../data/repositories';
 import type { SettingsState } from '../../settings/schema';
+import { resolveDisplay } from '../../settings/display';
 import ExerciseDemo from './ExerciseDemo';
 import SupportingLifts from './SupportingLifts';
 
@@ -88,17 +89,27 @@ export default function LiftCard({
   onLogged,
   session,
 }: LiftCardProps) {
+  const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
+
   const [rows, setRows] = useState<RowState[]>([]);
   const [rowsForRef, setRowsForRef] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [noteOpen, setNoteOpen] = useState(false);
 
-  // Optimistically assume no session exists yet (shows the interactive table
-  // immediately, with no loading gate); the mount effect below corrects this
-  // to the real logged session, if any, once the async lookup resolves.
-  const [existingSession, setExistingSession] = useState<Session | null>(null);
+  // Seeded from the `session` prop when a parent already resolved it, so a
+  // parent-provided session renders read-only on the very first commit (no
+  // interactive -> read-only flash). `null` (no prop) falls back to the
+  // optimistic "no session yet" assumption; the mount effect below corrects
+  // this to the real logged session, if any, once the async self-lookup
+  // resolves (only taken when the prop is omitted).
+  const [existingSession, setExistingSession] = useState<Session | null>(() =>
+    session !== undefined ? session : null,
+  );
   const [saveError, setSaveError] = useState(false);
   const savingRef = useRef(false);
 
-  const workoutKey = `${liftKey}:${week}:${cycle.id ?? 'x'}:${cycle.tm[liftKey]}:${settings.template.warmups}`;
+  const showWarmups = settings.template.warmups && display.warmups;
+  const workoutKey = `${liftKey}:${week}:${cycle.id ?? 'x'}:${cycle.tm[liftKey]}:${showWarmups}`;
   if (workoutKey !== rowsForRef) {
     setRows(
       withKindIndex(
@@ -107,12 +118,14 @@ export default function LiftCard({
           week,
           template: cycle.template,
           fivesPro: cycle.fivesPro,
-          warmups: settings.template.warmups,
+          warmups: showWarmups,
           roundingIncrement,
         }),
       ),
     );
     setRowsForRef(workoutKey);
+    setNotes('');
+    setNoteOpen(false);
   }
 
   useEffect(() => {
@@ -169,7 +182,7 @@ export default function LiftCard({
       amrapReps,
       estimated1RM,
       rpe: null,
-      notes: '',
+      notes,
     };
 
     const id = await sessionRepo.add(newSession);
@@ -210,6 +223,10 @@ export default function LiftCard({
 
   const tm = cycle.tm[liftKey];
 
+  const visibleRows = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => !(settings.hideCompletedWarmups && row.set.kind === 'warmup' && row.done));
+
   return (
     <section className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4">
       <header className="mb-3 flex items-start justify-between gap-3">
@@ -242,6 +259,10 @@ export default function LiftCard({
         </div>
       )}
 
+      {existingSession != null && existingSession.notes && (
+        <p className="mt-2 text-[13px] font-semibold text-[var(--muted)]">{existingSession.notes}</p>
+      )}
+
       {existingSession === null && saveError && (
         <div
           role="alert"
@@ -260,7 +281,7 @@ export default function LiftCard({
 
       {existingSession === null && (
         <ul className="flex flex-col gap-2 list-none p-0 m-0">
-          {rows.map((row, index) => {
+          {visibleRows.map(({ row, index }) => {
             const { set, done, actualReps, kindIndex } = row;
             const rowLabel = `${KIND_LABEL[set.kind]} set ${kindIndex} (${set.weight}${unit})`;
             const pct = Math.round(set.pct * 100);
@@ -368,6 +389,34 @@ export default function LiftCard({
             );
           })}
         </ul>
+      )}
+
+      {display.notes && existingSession === null && (
+        <div className="mt-3 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4">
+          {noteOpen ? (
+            <>
+              <label htmlFor={`lift-note-${liftKey}`} className="mb-2 block text-sm font-semibold">
+                Notes
+              </label>
+              <textarea
+                id={`lift-note-${liftKey}`}
+                autoFocus
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className="w-full rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+              />
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setNoteOpen(true)}
+              className="text-sm font-semibold text-[var(--accent)]"
+            >
+              {notes.trim() ? notes : '+ Add note'}
+            </button>
+          )}
+        </div>
       )}
 
       {settings.exerciseDemos && (

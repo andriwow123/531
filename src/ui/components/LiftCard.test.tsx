@@ -125,4 +125,86 @@ describe('LiftCard', () => {
     expect(screen.queryByRole('button', { name: /how to perform/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /supporting lifts/i })).toBeNull();
   });
+
+  it('hides a warm-up row once marked done when hideCompletedWarmups is set, leaving work rows intact', async () => {
+    const cycle = await seedCycle();
+    renderCard(cycle, { settings: { ...defaultSettings, hideCompletedWarmups: true } });
+
+    await screen.findByRole('heading', { name: 'Deadlift' });
+
+    const warmupToggles = screen.getAllByRole('button', {
+      name: /^Mark warm-up set \d+ \([\d.]+kg\) done$/,
+    });
+    expect(warmupToggles.length).toBeGreaterThan(0);
+    const firstLabel = warmupToggles[0].getAttribute('aria-label') as string;
+
+    fireEvent.click(warmupToggles[0]);
+
+    expect(screen.queryByRole('button', { name: firstLabel })).toBeNull();
+    // Work rows are unaffected.
+    expect(screen.getAllByText('×5').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('×5+')).toBeTruthy();
+  });
+
+  it('renders no warm-up rows when display.warmups is off', async () => {
+    const cycle = await seedCycle();
+    renderCard(cycle, { settings: { ...defaultSettings, displayOverrides: { warmups: false } } });
+
+    await screen.findByRole('heading', { name: 'Deadlift' });
+
+    expect(screen.queryAllByRole('button', { name: /^Mark warm-up set/ })).toHaveLength(0);
+    // Work + AMRAP rows still render.
+    expect(screen.getAllByText('×5').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('×5+')).toBeTruthy();
+  });
+
+  it('shows a note control pre-log, and saves a typed note into the logged Session', async () => {
+    const cycle = await seedCycle();
+    renderCard(cycle, { settings: { ...defaultSettings, displayOverrides: { notes: true } } });
+
+    await screen.findByRole('heading', { name: 'Deadlift' });
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add note' }));
+    const textarea = screen.getByLabelText('Notes') as HTMLTextAreaElement;
+    expect(textarea.id).toBe('lift-note-deadlift');
+    fireEvent.change(textarea, { target: { value: 'felt strong' } });
+
+    const workToggles = screen.getAllByRole('button', {
+      name: /^Mark work set \d+ \([\d.]+kg\) done$/,
+    });
+    workToggles.forEach((btn) => fireEvent.click(btn));
+    fireEvent.change(screen.getByLabelText('Reps done'), { target: { value: '6' } });
+    fireEvent.click(screen.getByRole('button', { name: /Mark work set \d.*AMRAP set done/i }));
+
+    await waitFor(async () => {
+      const sessions = await sessionRepo.forCycle(cycle.id as number);
+      expect(sessions.some((s) => s.liftKey === 'deadlift' && s.week === 1)).toBe(true);
+    });
+
+    const [session] = await sessionRepo.forCycle(cycle.id as number);
+    expect(session.notes).toBe('felt strong');
+  });
+
+  it('hides the note control when display.notes is off', async () => {
+    const cycle = await seedCycle();
+    renderCard(cycle, { settings: { ...defaultSettings, displayOverrides: { notes: false } } });
+
+    await screen.findByRole('heading', { name: 'Deadlift' });
+    expect(screen.queryByRole('button', { name: '+ Add note' })).toBeNull();
+  });
+
+  it('sources the workout template/fivesPro from the cycle snapshot, not live settings.template', async () => {
+    const cycle = await seedCycle();
+    const bbbCycle: Cycle = { ...cycle, template: 'bbb' };
+    renderCard(bbbCycle, {
+      settings: { ...defaultSettings, template: { ...defaultSettings.template, selected: 'base' } },
+    });
+
+    await screen.findByRole('heading', { name: 'Deadlift' });
+
+    // BBB supplemental rows (5 x 10 @ 50% TM) render even though the live
+    // settings' selected template is 'base' — buildWorkout must source the
+    // template from the `cycle` prop, not `settings.template.selected`.
+    expect(screen.getAllByText('supplemental')).toHaveLength(5);
+  });
 });

@@ -272,11 +272,6 @@ export default function Settings() {
               onChange={(v) => updateSettings({ displayPreset: v })}
             />
             <ToggleRow
-              label="Plate breakdown"
-              checked={display.plateBreakdown}
-              onChange={() => toggleDisplay('plateBreakdown')}
-            />
-            <ToggleRow
               label="Rest timer widget"
               checked={display.restTimer}
               onChange={() => toggleDisplay('restTimer')}
@@ -303,7 +298,7 @@ export default function Settings() {
               onChange={() => updateSettings({ bodyweightTracking: !settings.bodyweightTracking })}
             />
             <ToggleRow
-              label="Assistance tracking"
+              label="Supporting lifts"
               checked={settings.assistanceTracking}
               onChange={() => updateSettings({ assistanceTracking: !settings.assistanceTracking })}
             />
