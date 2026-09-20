@@ -12,7 +12,9 @@ export type StoredSettings = SettingsState & { id: 'app' };
 export interface BodyweightEntry { id?: number; date: string; weight: number; }
 export type AssistanceCategory = 'push' | 'pull' | 'legs' | 'core';
 export interface AssistanceEntry { id?: number; date: string; category: AssistanceCategory; name: string; sets: number; reps: number; weight: number | null; }
-export interface CustomExercise { id?: number; category: AssistanceCategory; name: string; }
+export interface CustomExercise { id?: number; category: AssistanceCategory; name: string; scheme?: string; }
+export interface HiddenSupporting { id?: number; category: AssistanceCategory; name: string; }
+export interface SupportingDone { id?: number; date: string; category: AssistanceCategory; name: string; }
 
 export const profileRepo = {
   get: (): Promise<Profile | undefined> => db.profile.get('me'),
@@ -56,4 +58,25 @@ export const assistanceRepo = {
 export const customExerciseRepo = {
   add: (c: CustomExercise) => db.customExercises.add(c),
   all: () => db.customExercises.toArray(),
+  remove: (id: number): Promise<void> => db.customExercises.delete(id),
+};
+export const hiddenSupportingRepo = {
+  add: (category: AssistanceCategory, name: string): Promise<number> => db.hiddenSupporting.add({ category, name }),
+  all: (): Promise<HiddenSupporting[]> => db.hiddenSupporting.toArray(),
+  remove: (id: number): Promise<void> => db.hiddenSupporting.delete(id),
+};
+export const supportingDoneRepo = {
+  toggle: async (date: string, category: AssistanceCategory, name: string): Promise<void> => {
+    const existing = await db.supportingDone
+      .where('date')
+      .equals(date)
+      .filter((d) => d.category === category && d.name === name)
+      .first();
+    if (existing?.id !== undefined) {
+      await db.supportingDone.delete(existing.id);
+    } else {
+      await db.supportingDone.add({ date, category, name });
+    }
+  },
+  forDate: (date: string): Promise<SupportingDone[]> => db.supportingDone.where('date').equals(date).toArray(),
 };

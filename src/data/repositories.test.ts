@@ -9,6 +9,8 @@ import {
   bodyweightRepo,
   assistanceRepo,
   customExerciseRepo,
+  hiddenSupportingRepo,
+  supportingDoneRepo,
 } from './repositories';
 import type { Cycle, Session } from './repositories';
 import { defaultSettings } from '../settings/schema';
@@ -131,5 +133,44 @@ describe('customExerciseRepo', () => {
     const all = await customExerciseRepo.all();
     expect(all).toHaveLength(1);
     expect(all[0].name).toBe('JM Press');
+  });
+  it('supports an optional scheme field', async () => {
+    const id = await customExerciseRepo.add({ category: 'push', name: 'JM Press', scheme: '3 × 8' });
+    const all = await customExerciseRepo.all();
+    expect(all.find((c) => c.id === id)?.scheme).toBe('3 × 8');
+  });
+  it('removes a custom exercise', async () => {
+    const id = await customExerciseRepo.add({ category: 'push', name: 'JM Press' });
+    await customExerciseRepo.remove(id);
+    expect(await customExerciseRepo.all()).toHaveLength(0);
+  });
+});
+describe('hiddenSupportingRepo', () => {
+  it('adds, lists, and removes hidden built-ins', async () => {
+    const id = await hiddenSupportingRepo.add('push', 'Dips');
+    const all = await hiddenSupportingRepo.all();
+    expect(all).toHaveLength(1);
+    expect(all[0]).toMatchObject({ category: 'push', name: 'Dips' });
+
+    await hiddenSupportingRepo.remove(id);
+    expect(await hiddenSupportingRepo.all()).toHaveLength(0);
+  });
+});
+describe('supportingDoneRepo', () => {
+  it('toggles a done marker on then off, and lists via forDate', async () => {
+    await supportingDoneRepo.toggle('2026-02-01', 'push', 'Dips');
+    let forDay = await supportingDoneRepo.forDate('2026-02-01');
+    expect(forDay).toHaveLength(1);
+    expect(forDay[0]).toMatchObject({ date: '2026-02-01', category: 'push', name: 'Dips' });
+
+    await supportingDoneRepo.toggle('2026-02-01', 'push', 'Dips');
+    forDay = await supportingDoneRepo.forDate('2026-02-01');
+    expect(forDay).toHaveLength(0);
+  });
+  it('only affects the matching date/category/name entry', async () => {
+    await supportingDoneRepo.toggle('2026-02-01', 'push', 'Dips');
+    await supportingDoneRepo.toggle('2026-02-01', 'pull', 'Chin-ups');
+    expect(await supportingDoneRepo.forDate('2026-02-01')).toHaveLength(2);
+    expect(await supportingDoneRepo.forDate('2026-02-02')).toHaveLength(0);
   });
 });
