@@ -225,6 +225,47 @@ describe('Home — DayStrip pager', () => {
   });
 });
 
+describe('Home — lift order display', () => {
+  it('renders day cards and DayStrip in the default order (press first) when no liftOrder is set', async () => {
+    await seed();
+    renderHome();
+
+    await waitForLoaded();
+
+    const pager = screen.getByTestId('day-pager');
+    const firstHeading = within(pager).getAllByRole('heading')[0];
+    expect(firstHeading.textContent).toBe('Overhead Press');
+    expect(within(firstHeading.closest('section') as HTMLElement).getByText('Day 1')).toBeTruthy();
+
+    const dayStripGroup = screen.getByRole('group', { name: 'Training day' });
+    const firstDayButton = within(dayStripGroup).getAllByRole('button')[0];
+    expect(firstDayButton.textContent).toMatch(/^Press/);
+  });
+
+  it('renders day cards and DayStrip in a custom liftOrder', async () => {
+    await seed();
+    await settingsRepo.save({
+      ...defaultSettings,
+      liftOrder: ['squat', 'deadlift', 'press', 'bench'],
+    });
+    renderHome();
+
+    await waitForLoaded();
+
+    const pager = screen.getByTestId('day-pager');
+    const firstHeading = within(pager).getAllByRole('heading')[0];
+    expect(firstHeading.textContent).toBe('Squat');
+    expect(within(firstHeading.closest('section') as HTMLElement).getByText('Day 1')).toBeTruthy();
+
+    const dayStripGroup = screen.getByRole('group', { name: 'Training day' });
+    const dayButtons = within(dayStripGroup).getAllByRole('button');
+    expect(dayButtons[0].textContent).toMatch(/^Squat/);
+    expect(dayButtons[1].textContent).toMatch(/^Deadlift/);
+    expect(dayButtons[2].textContent).toMatch(/^Press/);
+    expect(dayButtons[3].textContent).toMatch(/^Bench/);
+  });
+});
+
 describe('Home — settings pass-through to lift cards', () => {
   it('shows exercise demo and supporting lifts affordances on every card when enabled', async () => {
     await seed();

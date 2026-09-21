@@ -1,4 +1,4 @@
-import type { TemplateKey } from '../domain/types';
+import type { LiftKey, TemplateKey } from '../domain/types';
 
 export type DisplayPreset = 'simple' | 'standard' | 'detailed';
 export type DisplayElement = 'plateBreakdown' | 'restTimer' | 'notes' | 'estimated1RM' | 'warmups' | 'charts' | 'amrapPrBadges' | 'assistanceSection' | 'bodyweightWidget';
@@ -16,6 +16,9 @@ export interface SettingsState {
   exerciseDemos: boolean;
   bodyweightTracking: boolean;
   assistanceTracking: boolean;
+  /** Display order of the 4 lifts on Home's day pager/DayStrip. Additive field —
+   *  old saved settings may lack it; see `orderedLifts` for the tolerant fallback. */
+  liftOrder: LiftKey[];
 }
 
 export const defaultSettings: SettingsState = {
@@ -30,4 +33,5 @@ export const defaultSettings: SettingsState = {
   exerciseDemos: true,
   bodyweightTracking: true,
   assistanceTracking: true,
+  liftOrder: ['press', 'bench', 'squat', 'deadlift'],
 };

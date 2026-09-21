@@ -11,6 +11,7 @@ export { buildWorkout } from './workout';
 export type { WorkoutParams } from './workout';
 export { nextUp, LIFT_ORDER } from './schedule';
 export type { LoggedSession } from './schedule';
+export { orderedLifts, moveItem } from './liftOrder';
 export { estimatedOneRmSeries, trainingMaxSeries, personalRecord, cycleLog } from './history';
 export type { OneRmPoint, TmPoint, PR, CycleLogEntry, CycleLogGroup } from './history';
 export { EXERCISE_DEMOS, getExerciseDemo } from './exercises';

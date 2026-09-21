@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { UIEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { nextUp, LIFT_ORDER } from '../../domain';
+import { nextUp, LIFT_ORDER, orderedLifts } from '../../domain';
 import type { LiftKey, Unit, WeekNumber } from '../../domain';
 import { cycleRepo, profileRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, Session } from '../../data/repositories';
@@ -117,7 +117,8 @@ export default function Home() {
       setData({ cycle, profile, sessions });
       const next = nextUp(logged);
       setSelectedWeek(next.week);
-      setActiveDay(Math.max(0, LIFT_ORDER.indexOf(next.liftKey)));
+      const order = orderedLifts(settings.liftOrder);
+      setActiveDay(Math.max(0, order.indexOf(next.liftKey)));
     }
 
     load();
@@ -195,8 +196,9 @@ export default function Home() {
   }
 
   const unit = data.profile.units;
+  const order = orderedLifts(settings.liftOrder);
   const doneKeys = new Set(
-    LIFT_ORDER.filter((key) =>
+    order.filter((key) =>
       data.sessions.some((s) => s.status === 'done' && s.liftKey === key && s.week === selectedWeek),
     ),
   );
@@ -233,7 +235,7 @@ export default function Home() {
 
         <div className="mb-3">
           <DayStrip
-            lifts={LIFT_ORDER.map((key) => ({ key, label: DAY_LABEL[key] }))}
+            lifts={order.map((key) => ({ key, label: DAY_LABEL[key] }))}
             activeDay={activeDay}
             doneKeys={doneKeys}
             onSelect={goToDay}
@@ -246,7 +248,7 @@ export default function Home() {
           data-testid="day-pager"
           className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-1 px-1"
         >
-          {LIFT_ORDER.map((key, index) => (
+          {order.map((key, index) => (
             <div key={key} className="w-full flex-none snap-start px-1">
               <LiftCard
                 liftKey={key}
