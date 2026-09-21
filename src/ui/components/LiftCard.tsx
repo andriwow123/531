@@ -293,7 +293,7 @@ export default function LiftCard({
       return (
         <li
           key={i}
-          className="grid grid-cols-[3.25rem_1fr_6.5rem_1.75rem] items-center gap-2 rounded-[var(--r-hero)] bg-[var(--surface-2)] p-4 text-[var(--text)]"
+          className="grid grid-cols-[4.25rem_1fr_6.5rem_1.75rem] items-center gap-2 rounded-[var(--r-hero)] bg-[var(--surface-2)] p-4 text-[var(--text)]"
         >
           <div>
             <div className="text-[13px] font-bold">{KIND_LABEL[s.kind]}</div>
@@ -317,7 +317,7 @@ export default function LiftCard({
     return (
       <li
         key={i}
-        className="grid grid-cols-[3.25rem_1fr_6.5rem_1.75rem] items-center gap-2 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3.5 py-3"
+        className="grid grid-cols-[4.25rem_1fr_6.5rem_1.75rem] items-center gap-2 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3.5 py-3"
       >
         <div>
           <div className="text-[13px] font-bold">{KIND_LABEL[s.kind]}</div>
@@ -457,7 +457,7 @@ export default function LiftCard({
                       : 'bg-[var(--accent)] text-[var(--on-accent)]')
                   }
                 >
-                  <div className="grid grid-cols-[3.25rem_1fr_6.5rem_1.75rem] items-center gap-2">
+                  <div className="grid grid-cols-[4.25rem_1fr_6.5rem_1.75rem] items-center gap-2">
                     <div>
                       <div className="text-[13px] font-bold">{KIND_LABEL[set.kind]}</div>
                       <div className="text-[12px] font-semibold opacity-80">{pct}%</div>
@@ -516,7 +516,7 @@ export default function LiftCard({
               <li
                 key={index}
                 className={
-                  'grid grid-cols-[3.25rem_1fr_6.5rem_1.75rem] items-center gap-2 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3.5 py-3 transition-opacity ' +
+                  'grid grid-cols-[4.25rem_1fr_6.5rem_1.75rem] items-center gap-2 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3.5 py-3 transition-opacity ' +
                   (done ? 'opacity-60' : '')
                 }
               >

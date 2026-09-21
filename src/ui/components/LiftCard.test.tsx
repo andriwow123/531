@@ -228,7 +228,7 @@ describe('LiftCard', () => {
     // regardless of the reps/plate text length on any given row — that's
     // what makes the weight genuinely centered instead of drifting per row.
     const gridRows = [...container.querySelectorAll('li')].filter((li) =>
-      li.className.includes('grid-cols-[3.25rem_1fr_6.5rem_1.75rem]'),
+      li.className.includes('grid-cols-[4.25rem_1fr_6.5rem_1.75rem]'),
     );
     expect(gridRows.length).toBeGreaterThan(0);
 
