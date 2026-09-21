@@ -21,22 +21,30 @@ const CATEGORY_LABEL: Record<AssistanceCategory, string> = {
 
 const BBB_NAME = 'Boring But Big';
 
+type FieldKind = 'weight' | 'reps';
+type LogDraft = { weight: string; reps: string };
+
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function logKey(category: AssistanceCategory, name: string): string {
+  return `${category}|${name}`;
 }
 
 /**
  * Collapsed-by-default "Supporting lifts" checklist for a lift's cycle-overview
  * card: a Boring But Big row (same lift, 5x10 @ 50% TM) plus, per category
  * (Push/Pull/Core for upper lifts, Legs/Pull/Core for lower), the catalog +
- * custom exercises with done checkboxes, remove (hide/delete), and an
- * "+ Add exercise" control to add a custom one.
+ * custom exercises with done checkboxes, weight×reps logging, remove
+ * (hide/delete), and an "+ Add exercise" control to add a custom one.
  */
 export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }: SupportingLiftsProps) {
   const [open, setOpen] = useState(false);
   const [customs, setCustoms] = useState<CustomExercise[]>([]);
   const [hidden, setHidden] = useState<HiddenSupporting[]>([]);
   const [done, setDone] = useState<SupportingDone[]>([]);
+  const [logs, setLogs] = useState<Record<string, LogDraft>>({});
   const [addingFor, setAddingFor] = useState<AssistanceCategory | null>(null);
   const [addName, setAddName] = useState('');
   const [addScheme, setAddScheme] = useState('');
@@ -50,20 +58,57 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
     setCustoms(customsList);
     setHidden(hiddenList);
     setDone(doneList);
+
+    const mine = doneList.filter((d) => d.liftKey === liftKey);
+    const fromDb: Record<string, LogDraft> = {};
+    for (const d of mine) {
+      fromDb[logKey(d.category, d.name)] = {
+        weight: d.weight === null || d.weight === undefined ? '' : String(d.weight),
+        reps: d.reps === null || d.reps === undefined ? '' : String(d.reps),
+      };
+    }
+    // Merge (rather than replace) so in-flight edits on rows not yet persisted
+    // aren't clobbered by a reload triggered from blurring a different field.
+    setLogs((prev) => ({ ...prev, ...fromDb }));
   }
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const categories = categoriesForLift(liftKey);
   const bbbCategory = categories[0] ?? 'push';
   const bbbWeight = bbbFor(tm, roundingIncrement);
-  const bbbDone = done.some((d) => d.category === bbbCategory && d.name === BBB_NAME);
+  const bbbKey = logKey(bbbCategory, BBB_NAME);
+  const bbbDone = done.some((d) => d.category === bbbCategory && d.name === BBB_NAME && d.liftKey === liftKey);
 
   async function toggleDone(category: AssistanceCategory, name: string) {
     await supportingDoneRepo.toggle(todayIso(), liftKey, category, name);
     await load();
+  }
+
+  function updateLocalField(category: AssistanceCategory, name: string, field: FieldKind, value: string) {
+    const k = logKey(category, name);
+    setLogs((prev) => {
+      const existing = prev[k] ?? { weight: '', reps: '' };
+      return { ...prev, [k]: { ...existing, [field]: value } };
+    });
+  }
+
+  async function commitField(category: AssistanceCategory, name: string, field: FieldKind) {
+    const k = logKey(category, name);
+    const raw = (logs[k]?.[field] ?? '').trim();
+    const parsed = raw === '' ? null : Number(raw);
+    const safeParsed = parsed === null || Number.isNaN(parsed) ? null : parsed;
+    const patch = field === 'weight' ? { weight: safeParsed } : { reps: safeParsed };
+    await supportingDoneRepo.log(todayIso(), liftKey, category, name, patch);
+    await load();
+  }
+
+  function inputId(category: AssistanceCategory, name: string, field: FieldKind): string {
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    return `supporting-${liftKey}-${category}-${slug}-${field}`;
   }
 
   async function removeItem(category: AssistanceCategory, item: SupportingItem) {
@@ -94,6 +139,9 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
     setAddScheme('');
   }
 
+  const numberInputClass =
+    'rounded-lg border border-[var(--line)] bg-[var(--surface)] px-1.5 py-1 text-center text-sm font-bold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] appearance-none [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none';
+
   return (
     <div className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4">
       <button
@@ -107,24 +155,52 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
 
       {open && (
         <div className="mt-3 flex flex-col gap-4">
-          <label className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px]">
-            <span className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={bbbDone}
-                onChange={() => toggleDone(bbbCategory, BBB_NAME)}
-                aria-label={`Mark ${BBB_NAME} done`}
-                className="h-5 w-5 accent-[var(--accent)]"
-              />
-              <span>
-                <span className="font-extrabold">{BBB_NAME}</span>{' '}
-                <span className="text-[12px] font-semibold text-[var(--muted)]">same lift, for size</span>
+          <div className="flex flex-col gap-1.5 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={bbbDone}
+                  onChange={() => toggleDone(bbbCategory, BBB_NAME)}
+                  aria-label={`Mark ${BBB_NAME} done`}
+                  className="h-5 w-5 accent-[var(--accent)]"
+                />
+                <span>
+                  <span className="font-extrabold">{BBB_NAME}</span>{' '}
+                  <span className="text-[12px] font-semibold text-[var(--muted)]">same lift, for size</span>
+                </span>
               </span>
-            </span>
-            <span className="font-semibold text-[var(--muted)] tabular-nums">
-              5 × 10 @ {bbbWeight} {unit}
-            </span>
-          </label>
+              <span className="text-[12px] font-semibold text-[var(--muted)] tabular-nums">5 × 10</span>
+            </div>
+            <div className="flex items-center justify-end gap-1.5">
+              <input
+                id={inputId(bbbCategory, BBB_NAME, 'weight')}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                aria-label={`${BBB_NAME} weight`}
+                placeholder={String(bbbWeight)}
+                value={logs[bbbKey]?.weight ?? ''}
+                onChange={(e) => updateLocalField(bbbCategory, BBB_NAME, 'weight', e.target.value)}
+                onBlur={() => commitField(bbbCategory, BBB_NAME, 'weight')}
+                className={`w-14 ${numberInputClass}`}
+              />
+              <span className="text-[11px] font-bold text-[var(--muted)]">{unit}</span>
+              <span className="text-[11px] font-bold text-[var(--muted)]">×</span>
+              <input
+                id={inputId(bbbCategory, BBB_NAME, 'reps')}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                aria-label={`${BBB_NAME} reps`}
+                placeholder="10"
+                value={logs[bbbKey]?.reps ?? ''}
+                onChange={(e) => updateLocalField(bbbCategory, BBB_NAME, 'reps', e.target.value)}
+                onBlur={() => commitField(bbbCategory, BBB_NAME, 'reps')}
+                className={`w-12 ${numberInputClass}`}
+              />
+            </div>
+          </div>
 
           {categories.map((category) => {
             const items = supportingList(category, customs, hidden);
@@ -138,31 +214,64 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
 
                 <ul className="mt-1.5 flex flex-col gap-1.5 list-none p-0 m-0">
                   {items.map((item) => {
-                    const checked = done.some((d) => d.category === category && d.name === item.name);
+                    const checked = done.some(
+                      (d) => d.category === category && d.name === item.name && d.liftKey === liftKey,
+                    );
+                    const k = logKey(category, item.name);
                     return (
                       <li
                         key={item.name}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px]"
+                        className="flex flex-col gap-1.5 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px]"
                       >
-                        <span className="flex flex-1 items-center gap-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex flex-1 items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleDone(category, item.name)}
+                              aria-label={`Mark ${item.name} done`}
+                              className="h-5 w-5 flex-none accent-[var(--accent)]"
+                            />
+                            <span className="flex min-w-0 flex-col">
+                              <span className="truncate font-bold">{item.name}</span>
+                              <span className="text-[11px] font-semibold text-[var(--muted)]">{item.scheme}</span>
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(category, item)}
+                            aria-label={`Remove ${item.name}`}
+                            className="px-1 text-base font-bold leading-none text-[var(--muted)]"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-end gap-1.5">
                           <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleDone(category, item.name)}
-                            aria-label={`Mark ${item.name} done`}
-                            className="h-5 w-5 accent-[var(--accent)]"
+                            id={inputId(category, item.name, 'weight')}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            aria-label={`${item.name} weight`}
+                            value={logs[k]?.weight ?? ''}
+                            onChange={(e) => updateLocalField(category, item.name, 'weight', e.target.value)}
+                            onBlur={() => commitField(category, item.name, 'weight')}
+                            className={`w-14 ${numberInputClass}`}
                           />
-                          <span className="font-bold">{item.name}</span>
-                        </span>
-                        <span className="font-semibold text-[var(--muted)] tabular-nums">{item.scheme}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeItem(category, item)}
-                          aria-label={`Remove ${item.name}`}
-                          className="px-1 text-base font-bold leading-none text-[var(--muted)]"
-                        >
-                          ×
-                        </button>
+                          <span className="text-[11px] font-bold text-[var(--muted)]">{unit}</span>
+                          <span className="text-[11px] font-bold text-[var(--muted)]">×</span>
+                          <input
+                            id={inputId(category, item.name, 'reps')}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            aria-label={`${item.name} reps`}
+                            value={logs[k]?.reps ?? ''}
+                            onChange={(e) => updateLocalField(category, item.name, 'reps', e.target.value)}
+                            onBlur={() => commitField(category, item.name, 'reps')}
+                            className={`w-12 ${numberInputClass}`}
+                          />
+                        </div>
                       </li>
                     );
                   })}

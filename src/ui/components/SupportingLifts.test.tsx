@@ -28,11 +28,89 @@ describe('SupportingLifts', () => {
     expect(within(pushSection).getByText('Dips')).toBeTruthy();
   });
 
-  it('shows the Boring But Big row with computed weight', async () => {
+  it('shows the Boring But Big row with a suggested weight/reps', async () => {
     renderExpanded();
 
     await screen.findByText('Boring But Big');
-    expect(screen.getByText(/5 × 10 @ 50 kg/)).toBeTruthy();
+    const weightInput = screen.getByLabelText(/boring but big weight/i) as HTMLInputElement;
+    const repsInput = screen.getByLabelText(/boring but big reps/i) as HTMLInputElement;
+    expect(weightInput.placeholder).toBe('50');
+    expect(repsInput.placeholder).toBe('10');
+  });
+
+  it('renders weight and reps inputs for a catalog exercise and for Boring But Big', async () => {
+    renderExpanded();
+
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    await within(pushSection).findByText('Dips');
+
+    expect(within(pushSection).getByLabelText('Dips weight')).toBeTruthy();
+    expect(within(pushSection).getByLabelText('Dips reps')).toBeTruthy();
+    expect(screen.getByLabelText(/boring but big weight/i)).toBeTruthy();
+    expect(screen.getByLabelText(/boring but big reps/i)).toBeTruthy();
+  });
+
+  it('logs weight and reps on blur, persisting per liftKey and marking the row done', async () => {
+    renderExpanded();
+
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    await within(pushSection).findByText('Dips');
+
+    const weightInput = within(pushSection).getByLabelText('Dips weight');
+    fireEvent.change(weightInput, { target: { value: '40' } });
+    fireEvent.blur(weightInput);
+
+    await waitFor(async () => {
+      const done = await supportingDoneRepo.forDate(today);
+      const row = done.find((d) => d.liftKey === 'press' && d.category === 'push' && d.name === 'Dips');
+      expect(row?.weight).toBe(40);
+    });
+
+    const repsInput = within(pushSection).getByLabelText('Dips reps');
+    fireEvent.change(repsInput, { target: { value: '12' } });
+    fireEvent.blur(repsInput);
+
+    await waitFor(async () => {
+      const done = await supportingDoneRepo.forDate(today);
+      const row = done.find((d) => d.liftKey === 'press' && d.category === 'push' && d.name === 'Dips');
+      expect(row?.weight).toBe(40);
+      expect(row?.reps).toBe(12);
+    });
+
+    await waitFor(() => {
+      expect(
+        (within(pushSection).getByRole('checkbox', { name: /mark dips done/i }) as HTMLInputElement).checked,
+      ).toBe(true);
+    });
+  });
+
+  it('scopes weight/reps and done state per liftKey', async () => {
+    render(<SupportingLifts liftKey="press" tm={100} unit="kg" roundingIncrement={5} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /supporting lifts/i })[0]);
+
+    const pressPush = await screen.findByRole('region', { name: 'Push' });
+    const pressWeight = within(pressPush).getByLabelText('Dips weight');
+    fireEvent.change(pressWeight, { target: { value: '40' } });
+    fireEvent.blur(pressWeight);
+
+    await waitFor(async () => {
+      const done = await supportingDoneRepo.forDate(today);
+      expect(done.some((d) => d.liftKey === 'press' && d.name === 'Dips' && d.weight === 40)).toBe(true);
+    });
+
+    render(<SupportingLifts liftKey="bench" tm={100} unit="kg" roundingIncrement={5} />);
+    const benchButtons = screen.getAllByRole('button', { name: /supporting lifts/i });
+    fireEvent.click(benchButtons[benchButtons.length - 1]);
+
+    const benchSections = await screen.findAllByRole('region', { name: 'Push' });
+    const benchPush = benchSections[benchSections.length - 1];
+
+    await within(benchPush).findByText('Dips');
+    const benchWeightInput = within(benchPush).getByLabelText('Dips weight') as HTMLInputElement;
+    const benchCheckbox = within(benchPush).getByRole('checkbox', { name: /mark dips done/i }) as HTMLInputElement;
+
+    expect(benchWeightInput.value).toBe('');
+    expect(benchCheckbox.checked).toBe(false);
   });
 
   it('adds a custom exercise under a category, persisting it', async () => {
