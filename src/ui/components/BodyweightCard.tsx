@@ -157,7 +157,7 @@ export default function BodyweightCard() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const weight = Number(input);
+    const weight = Number(input.replace(',', '.'));
     if (!input.trim() || !Number.isFinite(weight) || weight <= 0) return;
     await bodyweightRepo.add({ date: new Date().toISOString().slice(0, 10), weight });
     setInput('');
@@ -181,10 +181,8 @@ export default function BodyweightCard() {
           Log today ({unit})
           <input
             id="bodyweight-log-input"
-            type="number"
+            type="text"
             inputMode="decimal"
-            min={0}
-            step="0.1"
             aria-label={`Log today's weight (${unit})`}
             value={input}
             onChange={(e) => setInput(e.target.value)}

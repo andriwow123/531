@@ -254,7 +254,7 @@ export default function Settings() {
 
   async function saveTm(key: LiftKey) {
     if (!cycle || cycle.id == null) return;
-    const value = Number(tmInputs[key]);
+    const value = Number((tmInputs[key] ?? '').replace(',', '.'));
     if (!Number.isFinite(value) || value <= 0) return;
     await cycleRepo.updateTrainingMax(cycle.id, key, value);
     setCycle({ ...cycle, tm: { ...cycle.tm, [key]: value } });
@@ -452,9 +452,8 @@ export default function Settings() {
                     <input
                       id={`tm-${key}`}
                       aria-label={`${LIFT_NAMES[key]} training max`}
-                      type="number"
+                      type="text"
                       inputMode="decimal"
-                      min={0}
                       value={tmInputs[key]}
                       onChange={(e) => changeTmInput(key, e.target.value)}
                       onBlur={() => saveTm(key)}

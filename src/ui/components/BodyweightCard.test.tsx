@@ -34,6 +34,20 @@ describe('BodyweightCard', () => {
     expect(input.value).toBe('');
   });
 
+  it('accepts a comma decimal separator (e.g. "80,5")', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+
+    render(<BodyweightCard />);
+    await screen.findByText('Log your bodyweight to see the trend.');
+
+    const input = screen.getByLabelText(/log today/i) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '80,5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+
+    await waitFor(async () => expect(await bodyweightRepo.all()).toHaveLength(1));
+    expect((await bodyweightRepo.all())[0].weight).toBe(80.5);
+  });
+
   it('ignores empty and non-positive input (no write)', async () => {
     await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
 

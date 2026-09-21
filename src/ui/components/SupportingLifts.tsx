@@ -161,7 +161,7 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
   async function commitField(category: AssistanceCategory, name: string, field: FieldKind) {
     const k = logKey(category, name);
     const raw = (logs[k]?.[field] ?? '').trim();
-    const parsed = raw === '' ? null : Number(raw);
+    const parsed = raw === '' ? null : Number(raw.replace(',', '.'));
     const safeParsed = parsed === null || Number.isNaN(parsed) ? null : parsed;
 
     const baseline = committedRef.current[k] ?? { weight: null, reps: null };
@@ -238,9 +238,8 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
             </span>
             <input
               id={inputId(bbbCategory, BBB_NAME, 'weight')}
-              type="number"
-              inputMode="numeric"
-              min={0}
+              type="text"
+              inputMode="decimal"
               aria-label={`${BBB_NAME} weight`}
               placeholder={String(bbbWeight)}
               value={logs[bbbKey]?.weight ?? ''}
@@ -294,7 +293,7 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
                           className="h-5 w-5 flex-none accent-[var(--accent)]"
                         />
                         <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="truncate font-bold">{item.name}</span>
+                          <span className="font-bold">{item.name}</span>
                           <span className="truncate text-[11px] font-semibold text-[var(--muted)]">
                             {item.scheme}
                           </span>
@@ -326,9 +325,8 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
                           <>
                             <input
                               id={inputId(category, item.name, 'weight')}
-                              type="number"
-                              inputMode="numeric"
-                              min={0}
+                              type="text"
+                              inputMode="decimal"
                               aria-label={`${item.name} weight`}
                               value={logs[k]?.weight ?? ''}
                               onChange={(e) => updateLocalField(category, item.name, 'weight', e.target.value)}

@@ -251,7 +251,7 @@ export default function LiftCard({
   }
 
   async function saveTmEdit() {
-    const value = Number(tmInput);
+    const value = Number(tmInput.replace(',', '.'));
     if (!Number.isFinite(value) || value <= 0) return;
     if (cycle.id == null) return;
     await cycleRepo.updateTrainingMax(cycle.id, liftKey, value);
@@ -355,9 +355,8 @@ export default function LiftCard({
                 <input
                   id={`training-max-${liftKey}`}
                   aria-label={`training-max-${liftKey}`}
-                  type="number"
+                  type="text"
                   inputMode="decimal"
-                  min={0}
                   value={tmInput}
                   onChange={(e) => setTmInput(e.target.value)}
                   onFocus={(e) => e.currentTarget.select()}
