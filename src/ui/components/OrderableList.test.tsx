@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { moveItem } from '../../domain';
-import { finalDropIndex } from './OrderableList';
+import { OrderableList, finalDropIndex } from './OrderableList';
 
 // finalDropIndex converts a raw drop-target row index — read from row
 // positions in the ORIGINAL, pre-removal list during a pointer drag — into
@@ -36,5 +37,64 @@ describe('finalDropIndex', () => {
     const order = ['press', 'bench', 'squat', 'deadlift'];
     const to = finalDropIndex(2, 0);
     expect(moveItem(order, 2, to)).toEqual(['squat', 'press', 'bench', 'deadlift']);
+  });
+});
+
+/** Stubs each row's getBoundingClientRect to lay them out top-to-bottom,
+ *  40px apart — jsdom does no real layout, so pointer-drag target detection
+ *  (which reads rects) needs deterministic stand-in geometry to be testable. */
+function stubRowLayout(rows: HTMLElement[]) {
+  rows.forEach((row, i) => {
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({
+      top: i * 40,
+      bottom: i * 40 + 40,
+      height: 40,
+      left: 0,
+      right: 200,
+      width: 200,
+      x: 0,
+      y: i * 40,
+      toJSON() {
+        return {};
+      },
+    } as DOMRect);
+  });
+}
+
+describe('OrderableList drag-to-last (regression)', () => {
+  const ITEMS = ['press', 'bench', 'squat', 'deadlift'];
+
+  function renderList(onReorder: (from: number, to: number) => void) {
+    render(
+      <OrderableList
+        items={ITEMS}
+        getKey={(item) => item}
+        getLabel={(item) => item}
+        onReorder={onReorder}
+      />,
+    );
+  }
+
+  it('dragging the second-to-last row past every row midpoint (past the end) reorders it to the LAST slot, not a no-op', () => {
+    // Same shared off-by-one as DayStrip: `targetIndexFromY` used to cap its
+    // past-all-midpoints fallback at `rects.length - 1`. For a drag starting
+    // one-before-last (index 2 of 4), `finalDropIndex(2, 3) === 2 ===
+    // startIndex`, so `onReorder` was never called.
+    const onReorder = vi.fn();
+    renderList(onReorder);
+
+    const handles = screen.getAllByRole('button', { name: /^Drag to reorder/ });
+    const rows = handles.map((handle) => handle.parentElement as HTMLElement);
+    stubRowLayout(rows);
+
+    const squatHandle = handles[2];
+    fireEvent.pointerDown(squatHandle, { pointerId: 1, clientY: 90 });
+    // clientY 1000 is past row 3's midpoint (140) — past every row.
+    fireEvent.pointerMove(squatHandle, { pointerId: 1, clientY: 1000 });
+    fireEvent.pointerUp(squatHandle, { pointerId: 1, clientY: 1000 });
+
+    // Raw target must be rects.length (4), so finalDropIndex(2, 4) === 3 —
+    // squat lands last, after deadlift.
+    expect(onReorder).toHaveBeenCalledWith(2, 3);
   });
 });

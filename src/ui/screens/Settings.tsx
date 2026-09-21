@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Unit, TemplateKey, LiftKey } from '../../domain';
-import { LIFT_ORDER, orderedLifts, moveItem } from '../../domain';
+import { orderedLifts, moveItem } from '../../domain';
 import { cycleRepo, profileRepo } from '../../data/repositories';
 import type { Cycle, Profile } from '../../data/repositories';
 import { resolveDisplay } from '../../settings/display';
@@ -445,7 +445,7 @@ export default function Settings() {
             {cycle === null ? (
               <p className="text-sm text-[var(--muted)]">No active cycle yet.</p>
             ) : cycle ? (
-              LIFT_ORDER.map((key) => (
+              orderedLifts(settings.liftOrder).map((key) => (
                 <div key={key} className="flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold">{LIFT_NAMES[key]}</span>
                   <div className="flex items-center gap-1.5">

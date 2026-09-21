@@ -9,7 +9,9 @@ export interface SettingsState {
   restTimer: { enabled: boolean; defaultSeconds: number; notify: boolean };
   schedule: { mode: 'rolling' | 'fixedDays'; days: number[] };
   progression: { upperIncrement: number; lowerIncrement: number };
-  /** When true, warm-up rows disappear from Home once marked done. */
+  /** Retired: completed sets (including warm-ups) always stay visible on
+   *  Home now. Kept only for saved-settings shape compatibility; no longer
+   *  read anywhere. */
   hideCompletedWarmups: boolean;
   theme: 'dark' | 'light' | 'system';
   /** When true, Home shows an expandable "How to perform" demo for the selected lift. */

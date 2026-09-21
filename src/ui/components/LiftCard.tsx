@@ -64,6 +64,16 @@ function withKindIndex(sets: WorkingSet[]): RowState[] {
   });
 }
 
+/** 1-based position of each logged set within its own kind (e.g. 2nd
+ *  warm-up), matching the interactive rows' per-kind numbering. */
+function loggedKindIndexes(sets: LoggedSet[]): number[] {
+  const counts: Record<SetKind, number> = { warmup: 0, main: 0, supplemental: 0 };
+  return sets.map((s) => {
+    counts[s.kind] += 1;
+    return counts[s.kind];
+  });
+}
+
 /** Per-side plate breakdown, e.g. "5 · 1.25", or "empty bar" when the bar alone suffices. */
 function formatPlates(weight: number, unit: Unit): string {
   const { perSide, leftover } = computePlates(weight, BAR_WEIGHT[unit], PLATE_SET[unit]);
@@ -256,19 +266,25 @@ export default function LiftCard({
   // retired.
   const visibleRows = rows.map((row, index) => ({ row, index }));
 
+  // Per-kind position of each already-logged set, for the read-only rows'
+  // aria-labels — matches the interactive rows' per-kind numbering
+  // (`kindIndex` above) instead of numbering by raw array position.
+  const loggedKindIndexesForSets =
+    existingSession != null ? loggedKindIndexes(existingSession.sets) : [];
+
   /**
    * Read-only row for an already-logged set (rendered once
    * `existingSession != null`): same visual idiom as the interactive rows,
    * but with no Done button / reps input — just weight, plates, reps and a
    * checkmark.
    */
-  function renderLoggedRow(s: LoggedSet, i: number) {
+  function renderLoggedRow(s: LoggedSet, i: number, kindIndex: number) {
     const pct = Math.round((s.weight / tm) * 100);
     const plateText = formatPlates(s.weight, unit);
     const repsLabel = s.isAmrap
       ? `${s.done && s.actualReps != null ? s.actualReps : s.targetReps} reps`
       : `×${s.targetReps}`;
-    const checkLabel = `${KIND_LABEL[s.kind]} set ${i + 1} (${s.weight}${unit}) logged`;
+    const checkLabel = `${KIND_LABEL[s.kind]} set ${kindIndex} (${s.weight}${unit}) logged`;
     const checkClasses =
       'grid h-[22px] w-[22px] flex-none place-items-center rounded-full text-xs font-extrabold ' +
       (s.done ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--line)] text-transparent');
@@ -398,7 +414,7 @@ export default function LiftCard({
 
       {existingSession != null && existingSession.sets.length > 0 && (
         <ul className="mt-2 flex flex-col gap-2 list-none p-0 m-0">
-          {existingSession.sets.map((s, i) => renderLoggedRow(s, i))}
+          {existingSession.sets.map((s, i) => renderLoggedRow(s, i, loggedKindIndexesForSets[i]))}
         </ul>
       )}
 

@@ -61,7 +61,13 @@ export default function DayStrip({ lifts, activeDay, doneKeys, onSelect, onReord
       if (r == null) continue;
       if (clientX < r.left + r.width / 2) return i;
     }
-    return rects.length - 1;
+    // Past every chip's midpoint: "drop after the last chip" is a raw target
+    // of `rects.length` (one past the last valid pre-removal index), not
+    // `rects.length - 1` — `finalDropIndex` expects that convention (see its
+    // doc comment in OrderableList.tsx) to be able to land a drag on the
+    // LAST slot. Capping here at `rects.length - 1` previously made the last
+    // position unreachable.
+    return rects.length;
   }
 
   function handlePointerDown(e: ReactPointerEvent<HTMLButtonElement>, index: number) {

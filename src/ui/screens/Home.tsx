@@ -58,7 +58,7 @@ function isCycleComplete(sessions: Session[]): boolean {
  * single shared query instead of letting every card query independently.
  */
 export default function Home() {
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, loaded: settingsLoaded } = useSettings();
   const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
   const navigate = useNavigate();
   const restTimer = useRestTimer(settings.restTimer.defaultSeconds);
@@ -81,6 +81,16 @@ export default function Home() {
   const [data, setData] = useState<LoadedData | null | undefined>(undefined);
   const [selectedWeek, setSelectedWeek] = useState<WeekNumber>(1);
   const [activeDay, setActiveDay] = useState(0);
+  // The order-independent suggested lift (nextUp's result), set once the
+  // cycle/session data loads. The initial `activeDay` is derived from this
+  // PLUS the loaded settings' liftOrder (see the effect below) rather than
+  // computed directly in `load()`, because `settings.liftOrder` there would
+  // still be the default — SettingsProvider loads asynchronously and this
+  // effect only runs once on mount.
+  const [suggestedLiftKey, setSuggestedLiftKey] = useState<LiftKey | null>(null);
+  // Guards the one-time initial activeDay placement below from re-firing
+  // after the user has already tapped/dragged/swiped to a different day.
+  const initedActiveDayRef = useRef(false);
   const pagerRef = useRef<HTMLDivElement | null>(null);
 
   // Guards the async `handleLogged` callback from touching state/navigation
@@ -117,8 +127,10 @@ export default function Home() {
       setData({ cycle, profile, sessions });
       const next = nextUp(logged);
       setSelectedWeek(next.week);
-      const order = orderedLifts(settings.liftOrder);
-      setActiveDay(Math.max(0, order.indexOf(next.liftKey)));
+      // Order-independent (nextUp only ever reasons in LIFT_ORDER space) —
+      // where this lands on the DAY STRIP depends on the loaded liftOrder,
+      // resolved separately below once settings have actually loaded.
+      setSuggestedLiftKey(next.liftKey);
     }
 
     load();
@@ -126,6 +138,22 @@ export default function Home() {
       cancelled = true;
     };
   }, [navigate]);
+
+  // One-time initial placement of activeDay: waits for BOTH the cycle data
+  // (suggestedLiftKey) AND the persisted settings (settingsLoaded) so a
+  // saved custom liftOrder is honored instead of racing the default one a
+  // synchronous first render sees. Runs once; afterward tap/swipe/drag own
+  // activeDay via their own setActiveDay calls (goToDay, handlePagerScroll,
+  // handleDayReorder).
+  useEffect(() => {
+    if (initedActiveDayRef.current) return;
+    if (!settingsLoaded || suggestedLiftKey == null) return;
+    const idx = orderedLifts(settings.liftOrder).indexOf(suggestedLiftKey);
+    if (idx >= 0) {
+      setActiveDay(idx);
+      initedActiveDayRef.current = true;
+    }
+  }, [settingsLoaded, suggestedLiftKey, settings.liftOrder]);
 
   // Re-queries this cycle's sessions after any card logs one, so every
   // card's `session` prop and the done-count both reflect the new state.
@@ -162,6 +190,7 @@ export default function Home() {
   // sync as the user swipes). `scrollTo` is optionally chained since jsdom
   // (unit tests) doesn't implement it.
   function goToDay(index: number) {
+    initedActiveDayRef.current = true;
     setActiveDay(index);
     const container = pagerRef.current;
     if (container) {
@@ -176,7 +205,10 @@ export default function Home() {
     const container = e.currentTarget;
     if (!container.clientWidth) return;
     const index = Math.round(container.scrollLeft / container.clientWidth);
-    if (index !== activeDay) setActiveDay(index);
+    if (index !== activeDay) {
+      initedActiveDayRef.current = true;
+      setActiveDay(index);
+    }
   }
 
   // DayStrip drag-to-reorder -> persists the new lift order, and keeps the
@@ -189,6 +221,7 @@ export default function Home() {
     const next = moveItem(order, from, to);
     updateSettings({ liftOrder: next });
     const nextActiveIndex = next.indexOf(activeKey);
+    initedActiveDayRef.current = true;
     setActiveDay(nextActiveIndex === -1 ? 0 : nextActiveIndex);
   }
 

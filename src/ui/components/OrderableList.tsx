@@ -56,7 +56,12 @@ export function OrderableList<T>({ items, getKey, getLabel, onReorder }: Orderab
       if (r == null) continue;
       if (clientY < r.top + r.height / 2) return i;
     }
-    return rects.length - 1;
+    // Past every row's midpoint: "drop after the last row" is a raw target of
+    // `rects.length` (one past the last valid pre-removal index), which is
+    // what `finalDropIndex` expects in order to land a drag on the LAST slot
+    // (see its doc comment above). Capping here at `rects.length - 1`
+    // previously made the last position unreachable.
+    return rects.length;
   }
 
   function handlePointerDown(e: ReactPointerEvent<HTMLButtonElement>, index: number) {

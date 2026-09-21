@@ -161,6 +161,40 @@ describe('DayStrip', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('dragging the second-to-last chip past every midpoint (past the end) reorders it to the LAST slot, not a no-op', () => {
+    // Regression test for the shared off-by-one: `targetIndexFromX` used to
+    // cap its past-all-midpoints fallback at `rects.length - 1`, so the raw
+    // target for "past the end" was indistinguishable from "drop before the
+    // last chip". For a drag that starts one-before-last (index 2 of 4),
+    // `finalDropIndex(2, 3) === 2 === startIndex`, so `onReorder` was never
+    // called — dragging squat to the very end silently did nothing.
+    const onSelect = vi.fn();
+    const onReorder = vi.fn();
+    render(
+      <DayStrip
+        lifts={LIFTS}
+        activeDay={0}
+        doneKeys={new Set()}
+        onSelect={onSelect}
+        onReorder={onReorder}
+      />,
+    );
+
+    const buttons = screen.getAllByRole('button');
+    stubChipLayout(buttons);
+
+    const squatButton = buttons[2];
+    fireEvent.pointerDown(squatButton, { pointerId: 1, clientX: 210 });
+    // clientX 1000 is past chip 3's midpoint (350) — past every chip.
+    fireEvent.pointerMove(squatButton, { pointerId: 1, clientX: 1000 });
+    fireEvent.pointerUp(squatButton, { pointerId: 1, clientX: 1000 });
+
+    // Raw target must be rects.length (4), so finalDropIndex(2, 4) === 3 —
+    // squat lands last, after deadlift.
+    expect(onReorder).toHaveBeenCalledWith(2, 3);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it('a plain click (no pointer events, e.g. keyboard activation) still calls onSelect once', () => {
     const onSelect = vi.fn();
     const onReorder = vi.fn();

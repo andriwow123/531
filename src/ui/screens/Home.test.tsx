@@ -228,6 +228,58 @@ describe('Home — DayStrip pager', () => {
   });
 });
 
+describe('Home — default active day respects a saved custom lift order', () => {
+  it('defaults the active day to nextUp\'s lift at ITS POSITION in a saved custom liftOrder, not the default order', async () => {
+    // Regression test: SettingsProvider loads settings asynchronously, so at
+    // the moment Home's initial-load effect ran, `settings.liftOrder` was
+    // still the DEFAULT (['press','bench','squat','deadlift']) even though a
+    // custom order is persisted. The bug computed activeDay as
+    // `order.indexOf(nextUp(...).liftKey)` using that stale default order —
+    // landing on the wrong chip/card once the custom order actually renders.
+    const cycleId = await seed();
+    await sessionRepo.add({
+      cycleId,
+      week: 1,
+      liftKey: 'press',
+      date: '2026-01-01',
+      status: 'done',
+      sets: [],
+      amrapReps: 8,
+      estimated1RM: 120,
+      rpe: null,
+      notes: '',
+    });
+    // nextUp after press is logged for week 1 -> bench, week 1.
+    // Custom saved order puts bench at index 3 (not its default index 1).
+    await settingsRepo.save({
+      ...defaultSettings,
+      liftOrder: ['squat', 'deadlift', 'press', 'bench'],
+    });
+
+    renderHome();
+    await waitForLoaded();
+
+    const dayStripGroup = screen.getByRole('group', { name: 'Training day' });
+    const dayButtons = within(dayStripGroup).getAllByRole('button');
+
+    // Cards/chips must render in the loaded custom order.
+    await waitFor(() => expect(dayButtons[3].textContent).toMatch(/^Bench/));
+
+    const benchDay = within(dayStripGroup).getByRole('button', { name: /^Bench/ });
+    await waitFor(() => expect(benchDay.getAttribute('aria-current')).toBe('true'));
+
+    // No other chip is marked active.
+    for (const label of ['Squat', 'Deadlift', 'Press']) {
+      const button = within(dayStripGroup).getByRole('button', { name: new RegExp(`^${label}`) });
+      expect(button.getAttribute('aria-current')).toBeNull();
+    }
+
+    const pager = screen.getByTestId('day-pager');
+    const firstHeading = within(pager).getAllByRole('heading')[0];
+    expect(firstHeading.textContent).toBe('Squat');
+  });
+});
+
 describe('Home — lift order display', () => {
   it('renders day cards and DayStrip in the default order (press first) when no liftOrder is set', async () => {
     await seed();
