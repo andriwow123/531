@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Unit, TemplateKey } from '../../domain';
-import { profileRepo } from '../../data/repositories';
-import type { Profile } from '../../data/repositories';
+import type { Unit, TemplateKey, LiftKey } from '../../domain';
+import { LIFT_ORDER } from '../../domain';
+import { cycleRepo, profileRepo } from '../../data/repositories';
+import type { Cycle, Profile } from '../../data/repositories';
 import { resolveDisplay } from '../../settings/display';
 import type { DisplayPreset, DisplayElement } from '../../settings/schema';
 import { useSettings } from '../settings/SettingsContext';
 import { NavIconLink, HomeIcon, HistoryIcon } from '../components/NavIcons';
+
+const LIFT_NAMES: Record<LiftKey, string> = {
+  press: 'Overhead Press',
+  bench: 'Bench Press',
+  squat: 'Squat',
+  deadlift: 'Deadlift',
+};
 
 const DISPLAY_PRESETS: { value: DisplayPreset; label: string }[] = [
   { value: 'simple', label: 'Simple' },
@@ -201,6 +209,13 @@ export default function Settings() {
   const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
 
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [cycle, setCycle] = useState<Cycle | null | undefined>(undefined);
+  const [tmInputs, setTmInputs] = useState<Record<LiftKey, string>>({
+    press: '',
+    bench: '',
+    squat: '',
+    deadlift: '',
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -211,6 +226,37 @@ export default function Settings() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    cycleRepo.active().then((c) => {
+      if (cancelled) return;
+      setCycle(c ?? null);
+      if (c) {
+        setTmInputs({
+          press: String(c.tm.press),
+          bench: String(c.tm.bench),
+          squat: String(c.tm.squat),
+          deadlift: String(c.tm.deadlift),
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function changeTmInput(key: LiftKey, value: string) {
+    setTmInputs((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function saveTm(key: LiftKey) {
+    if (!cycle || cycle.id == null) return;
+    const value = Number(tmInputs[key]);
+    if (!Number.isFinite(value) || value <= 0) return;
+    await cycleRepo.updateTrainingMax(cycle.id, key, value);
+    setCycle({ ...cycle, tm: { ...cycle.tm, [key]: value } });
+  }
 
   function toggleDisplay(el: DisplayElement) {
     updateSettings({
@@ -381,6 +427,36 @@ export default function Settings() {
                 disableDecrease={roundingIndex <= 0}
                 disableIncrease={roundingIndex === -1 || roundingIndex >= roundingSteps.length - 1}
               />
+            ) : (
+              <p className="text-sm text-[var(--muted)]">Loading…</p>
+            )}
+          </Section>
+
+          <Section title="Training maxes">
+            {cycle === null ? (
+              <p className="text-sm text-[var(--muted)]">No active cycle yet.</p>
+            ) : cycle ? (
+              LIFT_ORDER.map((key) => (
+                <div key={key} className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">{LIFT_NAMES[key]}</span>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      id={`tm-${key}`}
+                      aria-label={`${LIFT_NAMES[key]} training max`}
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      value={tmInputs[key]}
+                      onChange={(e) => changeTmInput(key, e.target.value)}
+                      onBlur={() => saveTm(key)}
+                      className="w-20 rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-right text-sm font-bold tabular-nums text-[var(--text)]"
+                    />
+                    <span className="text-sm font-bold text-[var(--muted)]">
+                      {profile ? profile.units : ''}
+                    </span>
+                  </div>
+                </div>
+              ))
             ) : (
               <p className="text-sm text-[var(--muted)]">Loading…</p>
             )}

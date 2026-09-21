@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { db } from '../../data/db';
-import { profileRepo, settingsRepo } from '../../data/repositories';
+import { cycleRepo, profileRepo, settingsRepo } from '../../data/repositories';
+import type { Cycle } from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
 import { SettingsProvider } from '../settings/SettingsContext';
 import Settings from './Settings';
@@ -24,6 +25,18 @@ function renderSettings() {
 
 async function seedProfile() {
   await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+}
+
+async function seedCycle(): Promise<Cycle> {
+  const id = await cycleRepo.add({
+    index: 1,
+    startedAt: '2026-01-01',
+    status: 'active',
+    template: 'base',
+    fivesPro: false,
+    tm: { press: 50, bench: 72.5, squat: 120, deadlift: 152.5 },
+  });
+  return { ...(await cycleRepo.active()), id } as Cycle;
 }
 
 describe('Settings', () => {
@@ -162,6 +175,56 @@ describe('Settings', () => {
     expect(await screen.findByText('kg', { selector: 'span' })).toBeInTheDocument();
     expect(await screen.findByText('85%')).toBeInTheDocument();
     expect(screen.getByText(/onboarding/i)).toBeInTheDocument();
+  });
+
+  it('shows a Training maxes section with the active cycle\'s current TM for each lift', async () => {
+    await seedProfile();
+    await seedCycle();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(await screen.findByText('Training maxes')).toBeInTheDocument();
+
+    const press = (await screen.findByLabelText(/overhead press training max/i)) as HTMLInputElement;
+    const bench = screen.getByLabelText(/bench press training max/i) as HTMLInputElement;
+    const squat = screen.getByLabelText(/squat training max/i) as HTMLInputElement;
+    const deadlift = screen.getByLabelText(/deadlift training max/i) as HTMLInputElement;
+
+    expect(press.value).toBe('50');
+    expect(bench.value).toBe('72.5');
+    expect(squat.value).toBe('120');
+    expect(deadlift.value).toBe('152.5');
+  });
+
+  it('editing a lift\'s training max and blurring persists via cycleRepo, leaving other lifts unchanged', async () => {
+    await seedProfile();
+    const cycle = await seedCycle();
+    renderSettings();
+
+    const squat = (await screen.findByLabelText(/squat training max/i)) as HTMLInputElement;
+    fireEvent.change(squat, { target: { value: '125' } });
+    fireEvent.blur(squat);
+
+    await waitFor(async () => {
+      const updated = await cycleRepo.active();
+      expect(updated?.tm.squat).toBe(125);
+    });
+
+    const updated = await cycleRepo.active();
+    expect(updated?.id).toBe(cycle.id);
+    expect(updated?.tm.press).toBe(50);
+    expect(updated?.tm.bench).toBe(72.5);
+    expect(updated?.tm.deadlift).toBe(152.5);
+  });
+
+  it('shows a muted empty state in Training maxes when there is no active cycle', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(await screen.findByText(/no active cycle/i)).toBeInTheDocument();
   });
 });
 
