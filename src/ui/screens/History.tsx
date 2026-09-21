@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   estimatedOneRmSeries,
   trainingMaxSeries,
@@ -12,7 +13,7 @@ import type { Cycle, Lift, Session } from '../../data/repositories';
 import ProgressChart from '../components/ProgressChart';
 import BodyweightCard from '../components/BodyweightCard';
 import { useSettings } from '../settings/SettingsContext';
-import { NavIconLink, HomeIcon, SettingsIcon } from '../components/NavIcons';
+import { NavIconLink, HistoryIcon, SettingsIcon } from '../components/NavIcons';
 
 const LIFT_NAMES: Record<LiftKey, string> = {
   press: 'Overhead Press',
@@ -63,15 +64,21 @@ export default function History() {
     };
   }, []);
 
-  const topBar = (
-    <div className="flex flex-none items-center gap-1.5">
-      <NavIconLink to="/" label="Today">
-        <HomeIcon />
-      </NavIconLink>
-      <NavIconLink to="/settings" label="Settings">
-        <SettingsIcon />
-      </NavIconLink>
-    </div>
+  const header = (
+    <header className="mb-4 flex items-center justify-between gap-3">
+      <Link to="/" aria-label="Home" className="min-w-0">
+        <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
+        <h2 className="text-[12px] font-semibold text-[var(--muted)]">Progress</h2>
+      </Link>
+      <div className="flex flex-none items-center gap-1.5">
+        <NavIconLink to="/history" label="History" active>
+          <HistoryIcon />
+        </NavIconLink>
+        <NavIconLink to="/settings" label="Settings">
+          <SettingsIcon />
+        </NavIconLink>
+      </div>
+    </header>
   );
 
   if (data === undefined) {
@@ -91,13 +98,7 @@ export default function History() {
     return (
       <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
         <div className="w-full max-w-md pb-4">
-          <header className="mb-4 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-xs font-semibold text-[var(--muted)]">History</div>
-              <h1 className="text-[26px] font-extrabold leading-tight">Progress</h1>
-            </div>
-            {topBar}
-          </header>
+          {header}
 
           {settings.bodyweightTracking && (
             <div className="mb-4">
@@ -118,13 +119,7 @@ export default function History() {
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
       <div className="w-full max-w-md pb-4">
-        <header className="mb-4 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-[var(--muted)]">History</div>
-            <h1 className="text-[26px] font-extrabold leading-tight">Progress</h1>
-          </div>
-          {topBar}
-        </header>
+        {header}
 
         {settings.bodyweightTracking && (
           <div className="mb-4">

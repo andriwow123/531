@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { UIEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { nextUp, LIFT_ORDER } from '../../domain';
 import type { LiftKey, Unit, WeekNumber } from '../../domain';
 import { cycleRepo, profileRepo, sessionRepo } from '../../data/repositories';
@@ -206,10 +206,10 @@ export default function Home() {
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
       <div className="w-full max-w-md pb-4">
         <header className="mb-3 flex items-center justify-between gap-3">
-          <div className="min-w-0">
+          <Link to="/" aria-label="Home" className="min-w-0">
             <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
             <p className="text-[12px] font-semibold text-[var(--muted)]">Wendler strength cycle</p>
-          </div>
+          </Link>
           <div className="flex flex-none items-center gap-1.5">
             <span className="flex-none rounded-[var(--r-pill)] bg-[var(--accent-soft)] px-2.5 py-1 text-[12px] font-extrabold text-[var(--accent)]">
               Cycle {data.cycle.index}

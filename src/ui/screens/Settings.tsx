@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import type { Unit, TemplateKey, LiftKey } from '../../domain';
 import { LIFT_ORDER } from '../../domain';
 import { cycleRepo, profileRepo } from '../../data/repositories';
@@ -7,7 +8,7 @@ import type { Cycle, Profile } from '../../data/repositories';
 import { resolveDisplay } from '../../settings/display';
 import type { DisplayPreset, DisplayElement } from '../../settings/schema';
 import { useSettings } from '../settings/SettingsContext';
-import { NavIconLink, HomeIcon, HistoryIcon } from '../components/NavIcons';
+import { NavIconLink, HistoryIcon, SettingsIcon } from '../components/NavIcons';
 
 const LIFT_NAMES: Record<LiftKey, string> = {
   press: 'Overhead Press',
@@ -306,16 +307,16 @@ export default function Settings() {
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
       <div className="w-full max-w-md pb-4">
         <header className="mb-4 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-[var(--muted)]">Preferences</div>
-            <h1 className="text-[26px] font-extrabold leading-tight">Settings</h1>
-          </div>
+          <Link to="/" aria-label="Home" className="min-w-0">
+            <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
+            <h2 className="text-[12px] font-semibold text-[var(--muted)]">Settings</h2>
+          </Link>
           <div className="flex flex-none items-center gap-1.5">
-            <NavIconLink to="/" label="Today">
-              <HomeIcon />
-            </NavIconLink>
             <NavIconLink to="/history" label="History">
               <HistoryIcon />
+            </NavIconLink>
+            <NavIconLink to="/settings" label="Settings" active>
+              <SettingsIcon />
             </NavIconLink>
           </div>
         </header>

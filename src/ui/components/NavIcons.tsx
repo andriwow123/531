@@ -70,23 +70,31 @@ export function SettingsIcon({ className }: IconProps) {
 }
 
 /**
- * Shared top-bar nav link: a ~40px rounded tappable icon button. `label`
+ * Shared top-bar nav link: a ~36px rounded tappable icon button. `label`
  * supplies the accessible name (the icons themselves are `aria-hidden`).
+ * When `active` (this link points at the screen currently shown), it renders
+ * with accent styling and `aria-current="page"` instead of the muted default.
  */
 export function NavIconLink({
   to,
   label,
+  active,
   children,
 }: {
   to: string;
   label: string;
+  active?: boolean;
   children: ReactNode;
 }) {
   return (
     <Link
       to={to}
       aria-label={label}
-      className="grid h-9 w-9 flex-none place-items-center rounded-[var(--r-pill)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--accent)]"
+      aria-current={active ? 'page' : undefined}
+      className={
+        'grid h-9 w-9 flex-none place-items-center rounded-[var(--r-pill)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--accent)] ' +
+        (active ? 'bg-[var(--surface-2)] text-[var(--accent)]' : 'text-[var(--muted)]')
+      }
     >
       {children}
     </Link>

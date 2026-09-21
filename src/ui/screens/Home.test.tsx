@@ -61,16 +61,22 @@ describe('Home', () => {
     }
   });
 
-  it('shows top-bar icon links to History and Settings', async () => {
+  it('shows a top-left Home link (the 5/3/1 wordmark) and top-right icon links to History and Settings', async () => {
     await seed();
     renderHome();
 
     await waitForLoaded();
 
+    const homeLink = screen.getByRole('link', { name: 'Home' });
+    expect(homeLink.getAttribute('href')).toBe('/');
+
     const historyLink = screen.getByRole('link', { name: 'History' });
     expect(historyLink.getAttribute('href')).toBe('/history');
+    expect(historyLink.getAttribute('aria-current')).toBeNull();
+
     const settingsLink = screen.getByRole('link', { name: 'Settings' });
     expect(settingsLink.getAttribute('href')).toBe('/settings');
+    expect(settingsLink.getAttribute('aria-current')).toBeNull();
   });
 
   it('WeekTabs switches the shown week — deload has no AMRAP set, week 1 does', async () => {

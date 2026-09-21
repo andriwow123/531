@@ -40,16 +40,24 @@ async function seedCycle(): Promise<Cycle> {
 }
 
 describe('Settings', () => {
-  it('shows top-bar icon links to Today and History', async () => {
+  it('shows a top-left Home link and top-right History + active Settings icon links', async () => {
     await seedProfile();
     renderSettings();
 
     await screen.findByRole('heading', { name: /settings/i });
 
-    const todayLink = screen.getByRole('link', { name: 'Today' });
-    expect(todayLink.getAttribute('href')).toBe('/');
+    const homeLink = screen.getByRole('link', { name: 'Home' });
+    expect(homeLink.getAttribute('href')).toBe('/');
+
     const historyLink = screen.getByRole('link', { name: 'History' });
     expect(historyLink.getAttribute('href')).toBe('/history');
+    expect(historyLink.getAttribute('aria-current')).toBeNull();
+
+    const settingsLink = screen.getByRole('link', { name: 'Settings' });
+    expect(settingsLink.getAttribute('href')).toBe('/settings');
+    expect(settingsLink.getAttribute('aria-current')).toBe('page');
+
+    expect(screen.queryByRole('link', { name: 'Today' })).toBeNull();
   });
 
   it('changing Theme to Dark calls through updateSettings and persists', async () => {

@@ -48,10 +48,19 @@ describe('History', () => {
     renderHistory();
 
     expect(await screen.findByText(/log a few workouts and your progress shows up here/i)).toBeTruthy();
-    const todayLink = screen.getByRole('link', { name: 'Today' });
-    expect(todayLink.getAttribute('href')).toBe('/');
+
+    const homeLink = screen.getByRole('link', { name: 'Home' });
+    expect(homeLink.getAttribute('href')).toBe('/');
+
+    const historyLink = screen.getByRole('link', { name: 'History' });
+    expect(historyLink.getAttribute('href')).toBe('/history');
+    expect(historyLink.getAttribute('aria-current')).toBe('page');
+
     const settingsLink = screen.getByRole('link', { name: 'Settings' });
     expect(settingsLink.getAttribute('href')).toBe('/settings');
+    expect(settingsLink.getAttribute('aria-current')).toBeNull();
+
+    expect(screen.queryByRole('link', { name: 'Today' })).toBeNull();
 
     // No lift cards or cycle log when there's nothing to show.
     expect(screen.queryByRole('heading', { name: 'Overhead Press' })).toBeNull();
@@ -88,10 +97,17 @@ describe('History', () => {
     expect(screen.getByText(/85 kg × 7/)).toBeTruthy();
 
     // Top-bar nav links are present on the populated (non-empty-state) path too.
-    const todayLink = screen.getByRole('link', { name: 'Today' });
-    expect(todayLink.getAttribute('href')).toBe('/');
+    const homeLink = screen.getByRole('link', { name: 'Home' });
+    expect(homeLink.getAttribute('href')).toBe('/');
+
+    const historyLink = screen.getByRole('link', { name: 'History' });
+    expect(historyLink.getAttribute('href')).toBe('/history');
+    expect(historyLink.getAttribute('aria-current')).toBe('page');
+
     const settingsLink = screen.getByRole('link', { name: 'Settings' });
     expect(settingsLink.getAttribute('href')).toBe('/settings');
+
+    expect(screen.queryByRole('link', { name: 'Today' })).toBeNull();
   });
 
   it('always shows the PR callout and progress chart for a lift with data', async () => {
