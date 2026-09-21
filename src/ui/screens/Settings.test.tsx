@@ -234,6 +234,75 @@ describe('Settings', () => {
 
     expect(await screen.findByText(/no active cycle/i)).toBeInTheDocument();
   });
+
+  it('shows a Workout day order section listing the 4 lifts in liftOrder order', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(await screen.findByText('Workout day order')).toBeInTheDocument();
+
+    const upLabels = screen
+      .getAllByRole('button', { name: /^Move .* up$/i })
+      .map((btn) => btn.getAttribute('aria-label'));
+    expect(upLabels).toEqual([
+      'Move Overhead Press up',
+      'Move Bench Press up',
+      'Move Squat up',
+      'Move Deadlift up',
+    ]);
+  });
+
+  it('clicking Move down on the first lift reorders via moveItem semantics and persists liftOrder', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Move Overhead Press down' }));
+
+    await waitFor(async () => {
+      const saved = await settingsRepo.get();
+      expect(saved.liftOrder).toEqual(['bench', 'press', 'squat', 'deadlift']);
+    });
+
+    const upLabels = screen
+      .getAllByRole('button', { name: /^Move .* up$/i })
+      .map((btn) => btn.getAttribute('aria-label'));
+    expect(upLabels).toEqual([
+      'Move Bench Press up',
+      'Move Overhead Press up',
+      'Move Squat up',
+      'Move Deadlift up',
+    ]);
+  });
+
+  it('clicking Move up on the second lift produces the same reorder as Move down on the first', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Move Bench Press up' }));
+
+    await waitFor(async () => {
+      const saved = await settingsRepo.get();
+      expect(saved.liftOrder).toEqual(['bench', 'press', 'squat', 'deadlift']);
+    });
+  });
+
+  it('disables Move up on the first row and Move down on the last row', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(await screen.findByRole('button', { name: 'Move Overhead Press up' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move Deadlift down' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move Overhead Press down' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move Deadlift up' })).not.toBeDisabled();
+  });
 });
 
 describe('Settings — notify permission', () => {

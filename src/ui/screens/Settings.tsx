@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Unit, TemplateKey, LiftKey } from '../../domain';
-import { LIFT_ORDER } from '../../domain';
+import { LIFT_ORDER, orderedLifts, moveItem } from '../../domain';
 import { cycleRepo, profileRepo } from '../../data/repositories';
 import type { Cycle, Profile } from '../../data/repositories';
 import { resolveDisplay } from '../../settings/display';
 import type { DisplayPreset, DisplayElement } from '../../settings/schema';
 import { useSettings } from '../settings/SettingsContext';
 import { NavIconLink, HistoryIcon, SettingsIcon } from '../components/NavIcons';
+import { OrderableList } from '../components/OrderableList';
 
 const LIFT_NAMES: Record<LiftKey, string> = {
   press: 'Overhead Press',
@@ -291,6 +292,11 @@ export default function Settings() {
     updateSettings({ restTimer: { ...settings.restTimer, notify: next } });
   }
 
+  function reorderLifts(from: number, to: number) {
+    const next = moveItem(orderedLifts(settings.liftOrder), from, to);
+    updateSettings({ liftOrder: next });
+  }
+
   function changeRestSeconds(dir: 1 | -1) {
     const next = Math.min(
       REST_SECONDS_MAX,
@@ -461,6 +467,15 @@ export default function Settings() {
             ) : (
               <p className="text-sm text-[var(--muted)]">Loading…</p>
             )}
+          </Section>
+
+          <Section title="Workout day order">
+            <OrderableList
+              items={orderedLifts(settings.liftOrder)}
+              getKey={(key) => key}
+              getLabel={(key) => LIFT_NAMES[key]}
+              onReorder={reorderLifts}
+            />
           </Section>
 
           <Section title="Profile">
