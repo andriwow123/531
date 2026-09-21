@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { db } from '../../data/db';
@@ -10,6 +10,9 @@ import Home from './Home';
 beforeEach(async () => {
   await db.delete();
   await db.open();
+  // jsdom has no real layout/scrolling — stub scrollTo so `goToDay`'s
+  // smooth-scroll call doesn't throw and can be asserted where relevant.
+  HTMLElement.prototype.scrollTo = vi.fn();
 });
 
 function renderHome() {
@@ -135,6 +138,72 @@ describe('Home', () => {
     );
 
     expect(await screen.findByText('Cycle end screen')).toBeTruthy();
+  });
+});
+
+describe('Home — DayStrip pager', () => {
+  it('renders the pager container alongside all 4 lift cards', async () => {
+    await seed();
+    renderHome();
+
+    await waitForLoaded();
+
+    expect(screen.getByTestId('day-pager')).toBeTruthy();
+    for (const name of ['Overhead Press', 'Bench Press', 'Squat', 'Deadlift']) {
+      expect(screen.getByRole('heading', { name })).toBeTruthy();
+    }
+  });
+
+  it('defaults the active day to press (nextUp) for a fresh cycle', async () => {
+    await seed();
+    renderHome();
+
+    await waitForLoaded();
+
+    const pressDay = screen.getByRole('button', { name: /^Press/ });
+    expect(pressDay.getAttribute('aria-current')).toBe('true');
+    const benchDay = screen.getByRole('button', { name: /^Bench/ });
+    expect(benchDay.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('defaults the active day to nextUp\'s lift once earlier lifts are already logged', async () => {
+    const cycleId = await seed();
+    await sessionRepo.add({
+      cycleId,
+      week: 1,
+      liftKey: 'press',
+      date: '2026-01-01',
+      status: 'done',
+      sets: [],
+      amrapReps: 8,
+      estimated1RM: 120,
+      rpe: null,
+      notes: '',
+    });
+
+    renderHome();
+    await waitForLoaded();
+
+    const benchDay = await screen.findByRole('button', { name: /^Bench/ });
+    expect(benchDay.getAttribute('aria-current')).toBe('true');
+    const pressDay = screen.getByRole('button', { name: /^Press/ });
+    expect(pressDay.getAttribute('aria-current')).toBeNull();
+    // Done marker: press already has a session logged for the selected week.
+    expect(within(pressDay).getByLabelText('done')).toBeTruthy();
+  });
+
+  it('clicking a different DayStrip day makes it active and scrolls the pager', async () => {
+    await seed();
+    renderHome();
+    await waitForLoaded();
+
+    const squatDay = screen.getByRole('button', { name: /^Squat/ });
+    fireEvent.click(squatDay);
+
+    expect(squatDay.getAttribute('aria-current')).toBe('true');
+    const pressDay = screen.getByRole('button', { name: /^Press/ });
+    expect(pressDay.getAttribute('aria-current')).toBeNull();
+    expect(HTMLElement.prototype.scrollTo).toHaveBeenCalled();
   });
 });
 

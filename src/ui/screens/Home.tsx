@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import type { UIEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { nextUp, LIFT_ORDER } from '../../domain';
-import type { Unit, WeekNumber } from '../../domain';
+import type { LiftKey, Unit, WeekNumber } from '../../domain';
 import { cycleRepo, profileRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, Session } from '../../data/repositories';
 import { resolveDisplay } from '../../settings/display';
@@ -9,6 +10,7 @@ import { useSettings } from '../settings/SettingsContext';
 import { useRestTimer } from '../hooks/useRestTimer';
 import LiftCard from '../components/LiftCard';
 import WeekTabs from '../components/WeekTabs';
+import DayStrip from '../components/DayStrip';
 
 /** One-line standard 5/3/1 scheme description per week, shown under the title row. */
 const PROTOCOL: Record<WeekNumber, string> = {
@@ -16,6 +18,14 @@ const PROTOCOL: Record<WeekNumber, string> = {
   2: '3×3/3/3+ · 70/80/90%',
   3: '5/3/1+ · 75/85/95%',
   4: 'Deload · 40/50/60%, no AMRAP',
+};
+
+/** Short day-strip labels per lift, distinct from LiftCard's fuller exercise names. */
+const DAY_LABEL: Record<LiftKey, string> = {
+  press: 'Press',
+  bench: 'Bench',
+  squat: 'Squat',
+  deadlift: 'Deadlift',
 };
 
 interface LoadedData {
@@ -69,6 +79,8 @@ export default function Home() {
 
   const [data, setData] = useState<LoadedData | null | undefined>(undefined);
   const [selectedWeek, setSelectedWeek] = useState<WeekNumber>(1);
+  const [activeDay, setActiveDay] = useState(0);
+  const pagerRef = useRef<HTMLDivElement | null>(null);
 
   // Guards the async `handleLogged` callback from touching state/navigation
   // after the screen has unmounted (the initial-load effect has its own
@@ -102,7 +114,9 @@ export default function Home() {
         .filter((s) => s.status === 'done')
         .map((s) => ({ liftKey: s.liftKey, week: s.week }));
       setData({ cycle, profile, sessions });
-      setSelectedWeek(nextUp(logged).week);
+      const next = nextUp(logged);
+      setSelectedWeek(next.week);
+      setActiveDay(Math.max(0, LIFT_ORDER.indexOf(next.liftKey)));
     }
 
     load();
@@ -128,6 +142,28 @@ export default function Home() {
     });
   }
 
+  // DayStrip selection -> smooth-scroll the pager to that page and mark it
+  // active immediately (the scroll-driven handler below then keeps it in
+  // sync as the user swipes). `scrollTo` is optionally chained since jsdom
+  // (unit tests) doesn't implement it.
+  function goToDay(index: number) {
+    setActiveDay(index);
+    const container = pagerRef.current;
+    if (container) {
+      container.scrollTo?.({ left: index * container.clientWidth, behavior: 'smooth' });
+    }
+  }
+
+  // Keeps the DayStrip's active marker in sync when the user swipes the
+  // pager directly instead of tapping a day. jsdom never fires a real
+  // scroll event, so this is exercised only in the real browser.
+  function handlePagerScroll(e: UIEvent<HTMLDivElement>) {
+    const container = e.currentTarget;
+    if (!container.clientWidth) return;
+    const index = Math.round(container.scrollLeft / container.clientWidth);
+    if (index !== activeDay) setActiveDay(index);
+  }
+
   if (data === undefined) {
     return (
       <main className="min-h-screen bg-[var(--bg)] px-4 py-8 text-[var(--text)]">
@@ -145,9 +181,12 @@ export default function Home() {
   }
 
   const unit = data.profile.units;
-  const doneCount = LIFT_ORDER.filter((key) =>
-    data.sessions.some((s) => s.status === 'done' && s.liftKey === key && s.week === selectedWeek),
-  ).length;
+  const doneKeys = new Set(
+    LIFT_ORDER.filter((key) =>
+      data.sessions.some((s) => s.status === 'done' && s.liftKey === key && s.week === selectedWeek),
+    ),
+  );
+  const doneCount = doneKeys.size;
 
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
@@ -167,24 +206,39 @@ export default function Home() {
           <WeekTabs week={selectedWeek} onChange={setSelectedWeek} />
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="mb-3">
+          <DayStrip
+            lifts={LIFT_ORDER.map((key) => ({ key, label: DAY_LABEL[key] }))}
+            activeDay={activeDay}
+            doneKeys={doneKeys}
+            onSelect={goToDay}
+          />
+        </div>
+
+        <div
+          ref={pagerRef}
+          onScroll={handlePagerScroll}
+          data-testid="day-pager"
+          className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-1 px-1"
+        >
           {LIFT_ORDER.map((key, index) => (
-            <LiftCard
-              key={key}
-              liftKey={key}
-              week={selectedWeek}
-              cycle={data.cycle}
-              unit={unit}
-              roundingIncrement={data.profile.roundingIncrement}
-              dayNumber={index + 1}
-              settings={settings}
-              session={
-                data.sessions.find(
-                  (s) => s.status === 'done' && s.liftKey === key && s.week === selectedWeek,
-                ) ?? null
-              }
-              onLogged={handleLogged}
-            />
+            <div key={key} className="w-full flex-none snap-start px-1">
+              <LiftCard
+                liftKey={key}
+                week={selectedWeek}
+                cycle={data.cycle}
+                unit={unit}
+                roundingIncrement={data.profile.roundingIncrement}
+                dayNumber={index + 1}
+                settings={settings}
+                session={
+                  data.sessions.find(
+                    (s) => s.status === 'done' && s.liftKey === key && s.week === selectedWeek,
+                  ) ?? null
+                }
+                onLogged={handleLogged}
+              />
+            </div>
           ))}
         </div>
 
