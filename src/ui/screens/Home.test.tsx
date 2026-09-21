@@ -266,6 +266,65 @@ describe('Home — lift order display', () => {
   });
 });
 
+describe('Home — DayStrip reorder', () => {
+  /** Stubs each chip's getBoundingClientRect to lay them out left-to-right,
+   *  100px apart — jsdom does no real layout, so the pointer-drag target
+   *  detection inside DayStrip needs deterministic stand-in geometry. */
+  function stubChipLayout(buttons: HTMLElement[]) {
+    buttons.forEach((btn, i) => {
+      vi.spyOn(btn, 'getBoundingClientRect').mockReturnValue({
+        left: i * 100,
+        right: i * 100 + 100,
+        width: 100,
+        top: 0,
+        bottom: 40,
+        height: 40,
+        x: i * 100,
+        y: 0,
+        toJSON() {
+          return {};
+        },
+      } as DOMRect);
+    });
+  }
+
+  it('dragging the active day chip past the threshold persists the new liftOrder and keeps that lift active', async () => {
+    await seed();
+    renderHome();
+    await waitForLoaded();
+
+    // Fresh cycle -> default order (press, bench, squat, deadlift), active day = press (index 0).
+    const dayStripGroup = screen.getByRole('group', { name: 'Training day' });
+    const buttons = within(dayStripGroup).getAllByRole('button');
+    stubChipLayout(buttons);
+
+    const pressButton = buttons[0];
+    fireEvent.pointerDown(pressButton, { pointerId: 1, clientX: 10 });
+    // clientX 220 falls left of chip 2's midpoint (250) -> rawTarget 2 ->
+    // finalDropIndex(0, 2) === 1, so press should land at index 1.
+    fireEvent.pointerMove(pressButton, { pointerId: 1, clientX: 220 });
+    fireEvent.pointerUp(pressButton, { pointerId: 1, clientX: 220 });
+
+    await waitFor(() => {
+      const updated = within(screen.getByRole('group', { name: 'Training day' })).getAllByRole(
+        'button',
+      );
+      expect(updated[0].textContent).toMatch(/^Bench/);
+      expect(updated[1].textContent).toMatch(/^Press/);
+    });
+
+    const updated = within(screen.getByRole('group', { name: 'Training day' })).getAllByRole(
+      'button',
+    );
+    // The active marker follows press's lift to its new slot, not the old slot index.
+    expect(updated[1].getAttribute('aria-current')).toBe('true');
+    expect(updated[0].getAttribute('aria-current')).toBeNull();
+
+    const saved = await settingsRepo.get();
+    expect(saved.liftOrder).toEqual(['bench', 'press', 'squat', 'deadlift']);
+  });
+});
+
 describe('Home — settings pass-through to lift cards', () => {
   it('shows exercise demo and supporting lifts affordances on every card when enabled', async () => {
     await seed();

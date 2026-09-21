@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { UIEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { nextUp, LIFT_ORDER, orderedLifts } from '../../domain';
+import { nextUp, LIFT_ORDER, orderedLifts, moveItem } from '../../domain';
 import type { LiftKey, Unit, WeekNumber } from '../../domain';
 import { cycleRepo, profileRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, Session } from '../../data/repositories';
@@ -58,7 +58,7 @@ function isCycleComplete(sessions: Session[]): boolean {
  * single shared query instead of letting every card query independently.
  */
 export default function Home() {
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
   const navigate = useNavigate();
   const restTimer = useRestTimer(settings.restTimer.defaultSeconds);
@@ -179,6 +179,19 @@ export default function Home() {
     if (index !== activeDay) setActiveDay(index);
   }
 
+  // DayStrip drag-to-reorder -> persists the new lift order, and keeps the
+  // active-day marker on the SAME lift the user was on (its slot may have
+  // moved), not stuck on whatever now occupies the old slot index.
+  function handleDayReorder(from: number, to: number) {
+    const order = orderedLifts(settings.liftOrder);
+    if (from < 0 || from >= order.length) return;
+    const activeKey = order[activeDay] ?? order[0];
+    const next = moveItem(order, from, to);
+    updateSettings({ liftOrder: next });
+    const nextActiveIndex = next.indexOf(activeKey);
+    setActiveDay(nextActiveIndex === -1 ? 0 : nextActiveIndex);
+  }
+
   if (data === undefined) {
     return (
       <main className="min-h-screen bg-[var(--bg)] px-4 py-8 text-[var(--text)]">
@@ -239,6 +252,7 @@ export default function Home() {
             activeDay={activeDay}
             doneKeys={doneKeys}
             onSelect={goToDay}
+            onReorder={handleDayReorder}
           />
         </div>
 
