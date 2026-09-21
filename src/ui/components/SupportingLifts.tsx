@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { categoriesForLift, bbbFor, supportingList } from '../../domain';
 import type { LiftKey, Unit, SupportingItem } from '../../domain';
@@ -23,6 +23,7 @@ const BBB_NAME = 'Boring But Big';
 
 type FieldKind = 'weight' | 'reps';
 type LogDraft = { weight: string; reps: string };
+type Baseline = { weight: number | null; reps: number | null };
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -49,7 +50,18 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
   const [addName, setAddName] = useState('');
   const [addScheme, setAddScheme] = useState('');
 
-  async function load() {
+  // The last-persisted weight/reps per key, used to decide whether a blur is a
+  // genuine change (write it) or a no-op tab-through (skip the write). A ref
+  // (not state) since it's only ever read/written synchronously inside event
+  // handlers and shouldn't itself trigger a re-render.
+  const committedRef = useRef<Record<string, Baseline>>({});
+  const seededRef = useRef(false);
+
+  // Refreshes catalog/hidden/done-state only. Deliberately does NOT touch
+  // `logs` — after the initial seed, the local input state is the source of
+  // truth, so a reload triggered by a commit or a toggle on one row never
+  // clobbers in-flight typing in another (unblurred) field.
+  async function refresh(): Promise<SupportingDone[]> {
     const [customsList, hiddenList, doneList] = await Promise.all([
       customExerciseRepo.all(),
       hiddenSupportingRepo.all(),
@@ -58,18 +70,27 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
     setCustoms(customsList);
     setHidden(hiddenList);
     setDone(doneList);
+    return doneList;
+  }
+
+  async function load() {
+    const doneList = await refresh();
+    if (seededRef.current) return;
+    seededRef.current = true;
 
     const mine = doneList.filter((d) => d.liftKey === liftKey);
     const fromDb: Record<string, LogDraft> = {};
+    const baseline: Record<string, Baseline> = {};
     for (const d of mine) {
-      fromDb[logKey(d.category, d.name)] = {
+      const k = logKey(d.category, d.name);
+      fromDb[k] = {
         weight: d.weight === null || d.weight === undefined ? '' : String(d.weight),
         reps: d.reps === null || d.reps === undefined ? '' : String(d.reps),
       };
+      baseline[k] = { weight: d.weight ?? null, reps: d.reps ?? null };
     }
-    // Merge (rather than replace) so in-flight edits on rows not yet persisted
-    // aren't clobbered by a reload triggered from blurring a different field.
-    setLogs((prev) => ({ ...prev, ...fromDb }));
+    setLogs(fromDb);
+    committedRef.current = baseline;
   }
 
   useEffect(() => {
@@ -85,7 +106,24 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
 
   async function toggleDone(category: AssistanceCategory, name: string) {
     await supportingDoneRepo.toggle(todayIso(), liftKey, category, name);
-    await load();
+    const doneList = await refresh();
+    const k = logKey(category, name);
+    const stillThere = doneList.some(
+      (d) => d.liftKey === liftKey && d.category === category && d.name === name,
+    );
+    // toggle() only ever adds a null/null row or deletes the row entirely, so
+    // either way the persisted baseline for this key is now null/null.
+    committedRef.current = { ...committedRef.current, [k]: { weight: null, reps: null } };
+    if (!stillThere) {
+      // Turned off: clear any local draft so a stale typed value doesn't
+      // linger in the input after the row is gone.
+      setLogs((prev) => {
+        if (!(k in prev)) return prev;
+        const next = { ...prev };
+        delete next[k];
+        return next;
+      });
+    }
   }
 
   function updateLocalField(category: AssistanceCategory, name: string, field: FieldKind, value: string) {
@@ -101,9 +139,14 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
     const raw = (logs[k]?.[field] ?? '').trim();
     const parsed = raw === '' ? null : Number(raw);
     const safeParsed = parsed === null || Number.isNaN(parsed) ? null : parsed;
+
+    const baseline = committedRef.current[k] ?? { weight: null, reps: null };
+    if (baseline[field] === safeParsed) return; // untouched / unchanged: no-op, never creates a row
+
     const patch = field === 'weight' ? { weight: safeParsed } : { reps: safeParsed };
     await supportingDoneRepo.log(todayIso(), liftKey, category, name, patch);
-    await load();
+    committedRef.current = { ...committedRef.current, [k]: { ...baseline, [field]: safeParsed } };
+    await refresh();
   }
 
   function inputId(category: AssistanceCategory, name: string, field: FieldKind): string {
@@ -118,7 +161,7 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
     } else {
       await hiddenSupportingRepo.add(category, item.name);
     }
-    await load();
+    await refresh();
   }
 
   function startAdding(category: AssistanceCategory) {
@@ -133,7 +176,7 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
     if (!name) return;
     const scheme = addScheme.trim();
     await customExerciseRepo.add(scheme ? { category, name, scheme } : { category, name });
-    await load();
+    await refresh();
     setAddingFor(null);
     setAddName('');
     setAddScheme('');

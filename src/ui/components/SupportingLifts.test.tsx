@@ -84,6 +84,55 @@ describe('SupportingLifts', () => {
     });
   });
 
+  it('does not create a row when blurring an untouched weight or reps input (tab-through, no typing)', async () => {
+    renderExpanded();
+
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    await within(pushSection).findByText('Dips');
+
+    const weightInput = within(pushSection).getByLabelText('Dips weight');
+    const repsInput = within(pushSection).getByLabelText('Dips reps');
+
+    // Simulate checkbox -> weight -> reps -> next row tab navigation with no typing.
+    fireEvent.blur(weightInput);
+    fireEvent.blur(repsInput);
+
+    const done = await supportingDoneRepo.forDate(today);
+    expect(done.some((d) => d.liftKey === 'press' && d.category === 'push' && d.name === 'Dips')).toBe(false);
+    expect(done).toHaveLength(0);
+
+    expect(
+      (within(pushSection).getByRole('checkbox', { name: /mark dips done/i }) as HTMLInputElement).checked,
+    ).toBe(false);
+  });
+
+  it('clearing a previously-logged value updates the persisted row instead of leaving it stale', async () => {
+    renderExpanded();
+
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    await within(pushSection).findByText('Dips');
+
+    const weightInput = within(pushSection).getByLabelText('Dips weight');
+    fireEvent.change(weightInput, { target: { value: '40' } });
+    fireEvent.blur(weightInput);
+
+    await waitFor(async () => {
+      const done = await supportingDoneRepo.forDate(today);
+      const row = done.find((d) => d.liftKey === 'press' && d.category === 'push' && d.name === 'Dips');
+      expect(row?.weight).toBe(40);
+    });
+
+    fireEvent.change(weightInput, { target: { value: '' } });
+    fireEvent.blur(weightInput);
+
+    await waitFor(async () => {
+      const done = await supportingDoneRepo.forDate(today);
+      const row = done.find((d) => d.liftKey === 'press' && d.category === 'push' && d.name === 'Dips');
+      expect(row).toBeTruthy();
+      expect(row?.weight).toBeNull();
+    });
+  });
+
   it('scopes weight/reps and done state per liftKey', async () => {
     render(<SupportingLifts liftKey="press" tm={100} unit="kg" roundingIncrement={5} />);
     fireEvent.click(screen.getAllByRole('button', { name: /supporting lifts/i })[0]);
