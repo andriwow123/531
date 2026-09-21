@@ -70,6 +70,12 @@ export default function Home() {
   const [data, setData] = useState<LoadedData | null | undefined>(undefined);
   const [selectedWeek, setSelectedWeek] = useState<WeekNumber>(1);
 
+  // Guards the async `handleLogged` callback from touching state/navigation
+  // after the screen has unmounted (the initial-load effect has its own
+  // `cancelled` flag; this covers the post-log re-query).
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
   // Initial load: active cycle, profile, and this cycle's logged sessions.
   // If every lift already has its week-4 session logged, the cycle is done —
   // route to the end-of-cycle review instead. Otherwise the selected week
@@ -113,6 +119,7 @@ export default function Home() {
     if (cycleId == null) return;
 
     sessionRepo.forCycle(cycleId).then((sessions) => {
+      if (!mountedRef.current) return;
       if (isCycleComplete(sessions)) {
         navigate('/cycle-end', { replace: true });
         return;

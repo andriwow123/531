@@ -126,6 +126,7 @@ export default function LiftCard({
     setRowsForRef(workoutKey);
     setNotes('');
     setNoteOpen(false);
+    setSaveError(false);
   }
 
   useEffect(() => {
