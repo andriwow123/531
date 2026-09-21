@@ -24,6 +24,11 @@ export const routes: RouteObject[] = [
   { path: '/settings', element: <Settings />, loader: requireProfile },
 ];
 
-export const router = createBrowserRouter(routes);
+// Under GitHub Pages the app is served from a sub-path (e.g. /531/); the router
+// must know that prefix so links/loaders resolve correctly. Vite injects it as
+// import.meta.env.BASE_URL ('/531/' in the deployed build, '/' in dev/tests).
+const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
+
+export const router = createBrowserRouter(routes, { basename });
 
 export type AppRouter = ReturnType<typeof createBrowserRouter>;
