@@ -61,6 +61,18 @@ describe('Home', () => {
     }
   });
 
+  it('shows top-bar icon links to History and Settings', async () => {
+    await seed();
+    renderHome();
+
+    await waitForLoaded();
+
+    const historyLink = screen.getByRole('link', { name: 'History' });
+    expect(historyLink.getAttribute('href')).toBe('/history');
+    const settingsLink = screen.getByRole('link', { name: 'Settings' });
+    expect(settingsLink.getAttribute('href')).toBe('/settings');
+  });
+
   it('WeekTabs switches the shown week — deload has no AMRAP set, week 1 does', async () => {
     await seed();
     renderHome();

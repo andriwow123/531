@@ -27,6 +27,18 @@ async function seedProfile() {
 }
 
 describe('Settings', () => {
+  it('shows top-bar icon links to Today and History', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    const todayLink = screen.getByRole('link', { name: 'Today' });
+    expect(todayLink.getAttribute('href')).toBe('/');
+    const historyLink = screen.getByRole('link', { name: 'History' });
+    expect(historyLink.getAttribute('href')).toBe('/history');
+  });
+
   it('changing Theme to Dark calls through updateSettings and persists', async () => {
     await seedProfile();
     renderSettings();

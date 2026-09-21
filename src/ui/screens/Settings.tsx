@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import type { Unit, TemplateKey } from '../../domain';
 import { profileRepo } from '../../data/repositories';
 import type { Profile } from '../../data/repositories';
 import { resolveDisplay } from '../../settings/display';
 import type { DisplayPreset, DisplayElement } from '../../settings/schema';
 import { useSettings } from '../settings/SettingsContext';
+import { NavIconLink, HomeIcon, HistoryIcon } from '../components/NavIcons';
 
 const DISPLAY_PRESETS: { value: DisplayPreset; label: string }[] = [
   { value: 'simple', label: 'Simple' },
@@ -259,9 +259,19 @@ export default function Settings() {
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
       <div className="w-full max-w-md pb-4">
-        <header className="mb-4">
-          <div className="text-xs font-semibold text-[var(--muted)]">Preferences</div>
-          <h1 className="text-[26px] font-extrabold leading-tight">Settings</h1>
+        <header className="mb-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-[var(--muted)]">Preferences</div>
+            <h1 className="text-[26px] font-extrabold leading-tight">Settings</h1>
+          </div>
+          <div className="flex flex-none items-center gap-1.5">
+            <NavIconLink to="/" label="Today">
+              <HomeIcon />
+            </NavIconLink>
+            <NavIconLink to="/history" label="History">
+              <HistoryIcon />
+            </NavIconLink>
+          </div>
         </header>
 
         <div className="flex flex-col gap-3">
@@ -394,12 +404,6 @@ export default function Settings() {
             </p>
           </Section>
         </div>
-
-        <nav className="mt-5 flex items-center justify-around text-xs font-bold text-[var(--muted)]">
-          <Link to="/">Today</Link>
-          <Link to="/history">History</Link>
-          <span className="text-[var(--accent)]">Settings</span>
-        </nav>
       </div>
     </main>
   );
