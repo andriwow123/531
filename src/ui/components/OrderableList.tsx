@@ -112,7 +112,7 @@ export function OrderableList<T>({ items, getKey, getLabel, onReorder }: Orderab
               rowRefs.current[index] = el;
             }}
             className={
-              'flex items-center gap-2 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 ' +
+              'flex select-none items-center gap-2 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 ' +
               (dragIndex === index ? 'opacity-70' : '')
             }
           >

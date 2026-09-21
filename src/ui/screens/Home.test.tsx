@@ -354,7 +354,13 @@ describe('Home — DayStrip reorder', () => {
     stubChipLayout(buttons);
 
     const pressButton = buttons[0];
+    // DayStrip only starts a drag after a press-and-hold (~400ms); fake the
+    // hold, then switch back to real timers for the rest of the gesture and
+    // the async settings save below.
+    vi.useFakeTimers();
     fireEvent.pointerDown(pressButton, { pointerId: 1, clientX: 10 });
+    vi.advanceTimersByTime(400);
+    vi.useRealTimers();
     // clientX 220 falls left of chip 2's midpoint (250) -> rawTarget 2 ->
     // finalDropIndex(0, 2) === 1, so press should land at index 1.
     fireEvent.pointerMove(pressButton, { pointerId: 1, clientX: 220 });

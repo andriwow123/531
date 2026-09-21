@@ -97,4 +97,15 @@ describe('OrderableList drag-to-last (regression)', () => {
     // squat lands last, after deadlift.
     expect(onReorder).toHaveBeenCalledWith(2, 3);
   });
+
+  it('rows carry select-none so handle-dragging does not highlight the row label text', () => {
+    renderList(vi.fn());
+
+    const handles = screen.getAllByRole('button', { name: /^Drag to reorder/ });
+    const rows = handles.map((handle) => handle.parentElement as HTMLElement);
+
+    for (const row of rows) {
+      expect(row.className).toContain('select-none');
+    }
+  });
 });
