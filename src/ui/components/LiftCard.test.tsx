@@ -218,20 +218,33 @@ describe('LiftCard', () => {
     expect(unchanged?.tm.deadlift).toBe(140);
   });
 
-  it('renders the weight numbers with a fixed-width, center-aligned span for row alignment', async () => {
+  it('renders every set row as a fixed-column grid so the weight lands in the same track on every row', async () => {
     const cycle = await seedCycle();
     const { container } = renderCard(cycle);
     await screen.findByRole('heading', { name: 'Deadlift' });
 
-    // The weight-number spans are centered within their fixed-width column
-    // (not right-aligned — that read off-center); the reps/plate columns to
-    // their right keep their own separate right-alignment untouched.
+    // Every set row (kind/% · weight · reps+plates · check) shares the same
+    // grid-column template, so the weight column is identically positioned
+    // regardless of the reps/plate text length on any given row — that's
+    // what makes the weight genuinely centered instead of drifting per row.
+    const gridRows = [...container.querySelectorAll('li')].filter((li) =>
+      li.className.includes('grid-cols-[3.25rem_1fr_6.5rem_1.75rem]'),
+    );
+    expect(gridRows.length).toBeGreaterThan(0);
+
+    // The weight number itself is centered within that fixed track (not
+    // right-aligned, and no longer a variable-width flex-1 span).
     const weightSpans = container.querySelectorAll('span.tabular-nums.text-center');
     expect(weightSpans.length).toBeGreaterThan(0);
     weightSpans.forEach((span) => {
-      expect(span.className).toMatch(/w-\[(7\.5rem|5rem)\]/);
+      expect(span.className).not.toMatch(/w-\[(7\.5rem|5rem)\]/);
+      expect(span.closest('.grid')).toBeTruthy();
     });
     expect(container.querySelectorAll('span.tabular-nums.text-right').length).toBe(0);
+
+    // The old variable-width centering wrapper (`flex-1 justify-center`,
+    // sized by the reps/plate column's content) is gone.
+    expect(container.querySelectorAll('.flex-1.justify-center').length).toBe(0);
   });
 
   it('shows exercise demo and supporting lifts affordances when enabled', async () => {

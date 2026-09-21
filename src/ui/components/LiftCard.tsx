@@ -286,48 +286,48 @@ export default function LiftCard({
       : `×${s.targetReps}`;
     const checkLabel = `${KIND_LABEL[s.kind]} set ${kindIndex} (${s.weight}${unit}) logged`;
     const checkClasses =
-      'grid h-[22px] w-[22px] flex-none place-items-center rounded-full text-xs font-extrabold ' +
+      'grid h-[22px] w-[22px] justify-self-center place-items-center rounded-full text-xs font-extrabold ' +
       (s.done ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--line)] text-transparent');
 
     if (s.isAmrap) {
       return (
-        <li key={i} className="rounded-[var(--r-hero)] bg-[var(--surface-2)] p-4 text-[var(--text)]">
-          <div className="flex items-center gap-3">
-            <div className="w-16 flex-none">
-              <div className="text-[13px] font-bold">{KIND_LABEL[s.kind]}</div>
-              <div className="text-[12px] font-semibold opacity-80">{pct}%</div>
-            </div>
-            <div className="flex flex-1 items-baseline justify-center gap-1">
-              <span className="inline-block w-[7.5rem] text-center text-[40px] font-extrabold leading-none tabular-nums">
-                {s.weight}
-              </span>
-              <span className="text-[13px] font-bold">{unit}</span>
-            </div>
-            <div className="flex-none text-right">
-              <div className="text-[17px] font-extrabold tabular-nums">{repsLabel}</div>
-              <div className="text-[11px] font-bold opacity-80">{plateText}</div>
-            </div>
-            <span aria-label={checkLabel} className={checkClasses}>
-              ✓
-            </span>
+        <li
+          key={i}
+          className="grid grid-cols-[3.25rem_1fr_6.5rem_1.75rem] items-center gap-2 rounded-[var(--r-hero)] bg-[var(--surface-2)] p-4 text-[var(--text)]"
+        >
+          <div>
+            <div className="text-[13px] font-bold">{KIND_LABEL[s.kind]}</div>
+            <div className="text-[12px] font-semibold opacity-80">{pct}%</div>
           </div>
+          <div className="flex items-baseline justify-center gap-1">
+            <span className="text-center text-[40px] font-extrabold leading-none tabular-nums">{s.weight}</span>
+            <span className="text-[13px] font-bold">{unit}</span>
+          </div>
+          <div className="text-right">
+            <div className="text-[17px] font-extrabold tabular-nums">{repsLabel}</div>
+            <div className="text-[11px] font-bold opacity-80">{plateText}</div>
+          </div>
+          <span aria-label={checkLabel} className={checkClasses}>
+            ✓
+          </span>
         </li>
       );
     }
 
     return (
-      <li key={i} className="flex items-center gap-3 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3.5 py-3">
-        <div className="w-16 flex-none">
+      <li
+        key={i}
+        className="grid grid-cols-[3.25rem_1fr_6.5rem_1.75rem] items-center gap-2 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3.5 py-3"
+      >
+        <div>
           <div className="text-[13px] font-bold">{KIND_LABEL[s.kind]}</div>
           <div className="text-[12px] font-semibold text-[var(--muted)]">{pct}%</div>
         </div>
-        <div className="flex flex-1 items-baseline justify-center gap-1">
-          <span className="inline-block w-[5rem] text-center text-[26px] font-extrabold tabular-nums">
-            {s.weight}
-          </span>
+        <div className="flex items-baseline justify-center gap-1">
+          <span className="text-center text-[26px] font-extrabold tabular-nums">{s.weight}</span>
           <span className="text-[12px] font-semibold text-[var(--muted)]">{unit}</span>
         </div>
-        <div className="flex-none text-right">
+        <div className="text-right">
           <div className="text-[15px] font-extrabold tabular-nums">{repsLabel}</div>
           <div className="text-[11px] font-semibold text-[var(--muted)]">{plateText}</div>
         </div>
@@ -457,18 +457,18 @@ export default function LiftCard({
                       : 'bg-[var(--accent)] text-[var(--on-accent)]')
                   }
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-16 flex-none">
+                  <div className="grid grid-cols-[3.25rem_1fr_6.5rem_1.75rem] items-center gap-2">
+                    <div>
                       <div className="text-[13px] font-bold">{KIND_LABEL[set.kind]}</div>
                       <div className="text-[12px] font-semibold opacity-80">{pct}%</div>
                     </div>
-                    <div className="flex flex-1 items-baseline justify-center gap-1">
-                      <span className="inline-block w-[7.5rem] text-center text-[40px] font-extrabold leading-none tabular-nums">
+                    <div className="flex items-baseline justify-center gap-1">
+                      <span className="text-center text-[40px] font-extrabold leading-none tabular-nums">
                         {set.weight}
                       </span>
                       <span className="text-[13px] font-bold">{unit}</span>
                     </div>
-                    <div className="flex-none text-right">
+                    <div className="text-right">
                       <div className="text-[17px] font-extrabold tabular-nums">×{set.reps}+</div>
                       <div className="text-[11px] font-bold opacity-80">{plateText}</div>
                     </div>
@@ -516,21 +516,19 @@ export default function LiftCard({
               <li
                 key={index}
                 className={
-                  'flex items-center gap-3 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3.5 py-3 transition-opacity ' +
+                  'grid grid-cols-[3.25rem_1fr_6.5rem_1.75rem] items-center gap-2 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3.5 py-3 transition-opacity ' +
                   (done ? 'opacity-60' : '')
                 }
               >
-                <div className="w-16 flex-none">
+                <div>
                   <div className="text-[13px] font-bold">{KIND_LABEL[set.kind]}</div>
                   <div className="text-[12px] font-semibold text-[var(--muted)]">{pct}%</div>
                 </div>
-                <div className="flex flex-1 items-baseline justify-center gap-1">
-                  <span className="inline-block w-[5rem] text-center text-[26px] font-extrabold tabular-nums">
-                    {set.weight}
-                  </span>
+                <div className="flex items-baseline justify-center gap-1">
+                  <span className="text-center text-[26px] font-extrabold tabular-nums">{set.weight}</span>
                   <span className="text-[12px] font-semibold text-[var(--muted)]">{unit}</span>
                 </div>
-                <div className="flex-none text-right">
+                <div className="text-right">
                   <div className="text-[15px] font-extrabold tabular-nums">×{set.reps}</div>
                   <div className="text-[11px] font-semibold text-[var(--muted)]">{plateText}</div>
                 </div>
@@ -540,7 +538,7 @@ export default function LiftCard({
                   aria-pressed={done}
                   aria-label={`Mark ${rowLabel} done`}
                   className={
-                    'grid h-[22px] w-[22px] flex-none place-items-center rounded-full text-xs font-extrabold ' +
+                    'grid h-[22px] w-[22px] justify-self-center place-items-center rounded-full text-xs font-extrabold ' +
                     (done ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--line)] text-transparent')
                   }
                 >
