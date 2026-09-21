@@ -28,6 +28,14 @@ describe('SupportingLifts', () => {
     expect(within(pushSection).getByText('Dips')).toBeTruthy();
   });
 
+  it('shows a long exercise name in full, not truncated', async () => {
+    renderExpanded();
+
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    const nameEl = await within(pushSection).findByText('Close-grip bench press');
+    expect(nameEl.textContent).toBe('Close-grip bench press');
+  });
+
   it('shows the Boring But Big row with a suggested weight/reps', async () => {
     renderExpanded();
 

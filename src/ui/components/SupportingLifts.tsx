@@ -283,46 +283,59 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
                     return (
                       <li
                         key={item.name}
-                        className="flex items-center gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-[13px]"
+                        className="flex flex-col gap-1 rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-[13px]"
                       >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleDone(category, item.name)}
-                          aria-label={`Mark ${item.name} done`}
-                          className="h-5 w-5 flex-none accent-[var(--accent)]"
-                        />
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="font-bold">{item.name}</span>
-                          <span className="truncate text-[11px] font-semibold text-[var(--muted)]">
-                            {item.scheme}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleDone(category, item.name)}
+                            aria-label={`Mark ${item.name} done`}
+                            className="h-5 w-5 flex-none accent-[var(--accent)]"
+                          />
+                          <span className="flex min-w-0 flex-1 flex-col">
+                            <span className="font-bold">{item.name}</span>
+                            <span className="truncate text-[11px] font-semibold text-[var(--muted)]">
+                              {item.scheme}
+                            </span>
                           </span>
-                        </span>
 
-                        {confirming ? (
-                          <span className="flex flex-none items-center gap-1.5">
-                            <span className="text-[11px] font-semibold text-[var(--muted)]">Remove?</span>
+                          {confirming ? (
+                            <span className="flex flex-none items-center gap-1.5">
+                              <span className="text-[11px] font-semibold text-[var(--muted)]">Remove?</span>
+                              <button
+                                type="button"
+                                onClick={() => setPendingRemove(null)}
+                                className="rounded-[var(--r-pill)] px-2 py-1 text-[11px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  removeItem(category, item);
+                                  setPendingRemove(null);
+                                }}
+                                aria-label={`Confirm remove ${item.name}`}
+                                className="rounded-[var(--r-pill)] bg-[var(--accent)] px-2 py-1 text-[11px] font-extrabold text-[var(--on-accent)]"
+                              >
+                                Remove
+                              </button>
+                            </span>
+                          ) : (
                             <button
                               type="button"
-                              onClick={() => setPendingRemove(null)}
-                              className="rounded-[var(--r-pill)] px-2 py-1 text-[11px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
+                              onClick={() => setPendingRemove(k)}
+                              aria-label={`Remove ${item.name}`}
+                              className="grid h-9 w-9 flex-none place-items-center rounded-[var(--r-pill)] text-[var(--muted)] hover:text-[var(--accent)]"
                             >
-                              Cancel
+                              <RemoveIcon />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                removeItem(category, item);
-                                setPendingRemove(null);
-                              }}
-                              aria-label={`Confirm remove ${item.name}`}
-                              className="rounded-[var(--r-pill)] bg-[var(--accent)] px-2 py-1 text-[11px] font-extrabold text-[var(--on-accent)]"
-                            >
-                              Remove
-                            </button>
-                          </span>
-                        ) : (
-                          <>
+                          )}
+                        </div>
+
+                        {!confirming && (
+                          <div className="flex items-center justify-end gap-1.5">
                             <input
                               id={inputId(category, item.name, 'weight')}
                               type="text"
@@ -346,15 +359,7 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
                               onBlur={() => commitField(category, item.name, 'reps')}
                               className={`w-10 flex-none ${numberInputClass}`}
                             />
-                            <button
-                              type="button"
-                              onClick={() => setPendingRemove(k)}
-                              aria-label={`Remove ${item.name}`}
-                              className="grid h-9 w-9 flex-none place-items-center rounded-[var(--r-pill)] text-[var(--muted)] hover:text-[var(--accent)]"
-                            >
-                              <RemoveIcon />
-                            </button>
-                          </>
+                          </div>
                         )}
                       </li>
                     );
