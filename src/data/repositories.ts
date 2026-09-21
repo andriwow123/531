@@ -38,6 +38,11 @@ export const cycleRepo = {
   add: (c: Cycle): Promise<number> => db.cycles.add(c),
   complete: (id: number): Promise<void> => db.cycles.update(id, { status: 'completed' }).then(() => {}),
   all: (): Promise<Cycle[]> => db.cycles.toArray(),
+  updateTrainingMax: async (cycleId: number, liftKey: LiftKey, tm: number): Promise<void> => {
+    const c = await db.cycles.get(cycleId);
+    if (!c) return;
+    await db.cycles.update(cycleId, { tm: { ...c.tm, [liftKey]: tm } });
+  },
 };
 export const sessionRepo = {
   forCycle: (cycleId: number): Promise<Session[]> => db.sessions.where('cycleId').equals(cycleId).toArray(),

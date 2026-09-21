@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { db } from '../../data/db';
 import { cycleRepo, sessionRepo } from '../../data/repositories';
@@ -107,6 +107,55 @@ describe('LiftCard', () => {
 
     expect(await screen.findByText(/logged/i)).toBeTruthy();
     expect(screen.queryByLabelText('Reps done')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit training max' })).toBeNull();
+  });
+
+  it('shows an editable training max for an unlogged lift; saving persists the new tm and notifies the parent', async () => {
+    const cycle = await seedCycle();
+    const onTmChange = vi.fn();
+    renderCard(cycle, { onTmChange });
+
+    const editButton = await screen.findByRole('button', { name: 'Edit training max' });
+    expect(editButton.textContent).toContain('140');
+
+    fireEvent.click(editButton);
+
+    const input = screen.getByLabelText('training-max-deadlift') as HTMLInputElement;
+    expect(input.value).toBe('140');
+    fireEvent.change(input, { target: { value: '145' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(onTmChange).toHaveBeenCalledTimes(1);
+    });
+
+    const updated = await cycleRepo.active();
+    expect(updated?.tm.deadlift).toBe(145);
+    expect(updated?.tm.press).toBe(100); // unaffected lift
+  });
+
+  it('cancelling the training max editor discards the change', async () => {
+    const cycle = await seedCycle();
+    renderCard(cycle);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit training max' }));
+    const input = screen.getByLabelText('training-max-deadlift') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '999' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByLabelText('training-max-deadlift')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Edit training max' }).textContent).toContain('140');
+    const unchanged = await cycleRepo.active();
+    expect(unchanged?.tm.deadlift).toBe(140);
+  });
+
+  it('renders the weight numbers with a fixed-width, right-aligned span for row alignment', async () => {
+    const cycle = await seedCycle();
+    const { container } = renderCard(cycle);
+    await screen.findByRole('heading', { name: 'Deadlift' });
+
+    const weightSpans = container.querySelectorAll('span.tabular-nums.text-right');
+    expect(weightSpans.length).toBeGreaterThan(0);
   });
 
   it('shows exercise demo and supporting lifts affordances when enabled', async () => {

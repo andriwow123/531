@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { buildWorkout, computePlates, estimate1RM } from '../../domain';
 import type { LiftKey, SetKind, Unit, WeekNumber, WorkingSet } from '../../domain';
-import { sessionRepo } from '../../data/repositories';
+import { cycleRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, LoggedSet, Session } from '../../data/repositories';
 import type { SettingsState } from '../../settings/schema';
 import { resolveDisplay } from '../../settings/display';
@@ -17,6 +17,8 @@ export interface LiftCardProps {
   dayNumber: number;
   settings: SettingsState;
   onLogged?: () => void;
+  /** Called after a training-max edit is saved, so a parent can re-load the cycle. */
+  onTmChange?: () => void;
   /**
    * Pre-resolved logged session for this lift/week, supplied by a parent
    * that already loaded the cycle's sessions (avoids a redundant per-card
@@ -87,6 +89,7 @@ export default function LiftCard({
   dayNumber,
   settings,
   onLogged,
+  onTmChange,
   session,
 }: LiftCardProps) {
   const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
@@ -108,6 +111,11 @@ export default function LiftCard({
   const [saveError, setSaveError] = useState(false);
   const savingRef = useRef(false);
 
+  // Inline training-max editor state (header). Only ever open while the lift
+  // is unlogged; closed by Save (after persisting) or Cancel.
+  const [editingTm, setEditingTm] = useState(false);
+  const [tmInput, setTmInput] = useState('');
+
   const showWarmups = settings.template.warmups && display.warmups;
   const workoutKey = `${liftKey}:${week}:${cycle.id ?? 'x'}:${cycle.tm[liftKey]}:${showWarmups}`;
   if (workoutKey !== rowsForRef) {
@@ -127,6 +135,7 @@ export default function LiftCard({
     setNotes('');
     setNoteOpen(false);
     setSaveError(false);
+    setEditingTm(false);
   }
 
   useEffect(() => {
@@ -222,6 +231,24 @@ export default function LiftCard({
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, actualReps: reps } : r)));
   }
 
+  function openTmEditor() {
+    setTmInput(String(tm));
+    setEditingTm(true);
+  }
+
+  function cancelTmEdit() {
+    setEditingTm(false);
+  }
+
+  async function saveTmEdit() {
+    const value = Number(tmInput);
+    if (!Number.isFinite(value) || value <= 0) return;
+    if (cycle.id == null) return;
+    await cycleRepo.updateTrainingMax(cycle.id, liftKey, value);
+    setEditingTm(false);
+    onTmChange?.();
+  }
+
   const tm = cycle.tm[liftKey];
 
   const visibleRows = rows
@@ -239,9 +266,49 @@ export default function LiftCard({
           <div className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--muted)]">
             training max
           </div>
-          <div className="text-sm font-extrabold tabular-nums">
-            {tm} {unit}
-          </div>
+          {existingSession === null && cycle.id != null ? (
+            editingTm ? (
+              <div className="flex items-center justify-end gap-1.5">
+                <input
+                  id={`training-max-${liftKey}`}
+                  aria-label={`training-max-${liftKey}`}
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  value={tmInput}
+                  onChange={(e) => setTmInput(e.target.value)}
+                  className="w-16 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-right text-sm font-extrabold tabular-nums text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                />
+                <button
+                  type="button"
+                  onClick={saveTmEdit}
+                  className="rounded-[var(--r-pill)] bg-[var(--accent)] px-2.5 py-1 text-[11px] font-extrabold text-[var(--on-accent)]"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelTmEdit}
+                  className="rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-extrabold text-[var(--text)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                aria-label="Edit training max"
+                onClick={openTmEditor}
+                className="text-sm font-extrabold tabular-nums"
+              >
+                {tm} {unit}
+              </button>
+            )
+          ) : (
+            <div className="text-sm font-extrabold tabular-nums">
+              {tm} {unit}
+            </div>
+          )}
         </div>
       </header>
 
@@ -305,7 +372,7 @@ export default function LiftCard({
                       <div className="text-[12px] font-semibold opacity-80">{pct}%</div>
                     </div>
                     <div className="flex flex-1 items-baseline justify-center gap-1">
-                      <span className="text-[40px] font-extrabold leading-none tabular-nums">
+                      <span className="inline-block w-[7.5rem] text-right text-[40px] font-extrabold leading-none tabular-nums">
                         {set.weight}
                       </span>
                       <span className="text-[13px] font-bold">{unit}</span>
@@ -367,7 +434,9 @@ export default function LiftCard({
                   <div className="text-[12px] font-semibold text-[var(--muted)]">{pct}%</div>
                 </div>
                 <div className="flex flex-1 items-baseline justify-center gap-1">
-                  <span className="text-[26px] font-extrabold tabular-nums">{set.weight}</span>
+                  <span className="inline-block w-[5rem] text-right text-[26px] font-extrabold tabular-nums">
+                    {set.weight}
+                  </span>
                   <span className="text-[12px] font-semibold text-[var(--muted)]">{unit}</span>
                 </div>
                 <div className="flex-none text-right">

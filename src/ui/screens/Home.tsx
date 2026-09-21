@@ -143,6 +143,19 @@ export default function Home() {
     });
   }
 
+  // Re-loads the active cycle (and this cycle's sessions) after a training-max
+  // edit, so `data.cycle.tm` refreshes and every card's set table rebuilds.
+  // Deliberately leaves `selectedWeek`/`activeDay` untouched — this is a data
+  // refresh, not a navigation.
+  function handleTmChange() {
+    cycleRepo.active().then(async (cycle) => {
+      if (!mountedRef.current || !cycle || cycle.id == null) return;
+      const sessions = await sessionRepo.forCycle(cycle.id);
+      if (!mountedRef.current) return;
+      setData((prev) => (prev ? { ...prev, cycle, sessions } : prev));
+    });
+  }
+
   // DayStrip selection -> smooth-scroll the pager to that page and mark it
   // active immediately (the scroll-driven handler below then keeps it in
   // sync as the user swipes). `scrollTo` is optionally chained since jsdom
@@ -249,6 +262,7 @@ export default function Home() {
                   ) ?? null
                 }
                 onLogged={handleLogged}
+                onTmChange={handleTmChange}
               />
             </div>
           ))}
