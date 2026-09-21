@@ -352,7 +352,7 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
                               type="button"
                               onClick={() => setPendingRemove(k)}
                               aria-label={`Remove ${item.name}`}
-                              className="grid h-8 w-8 flex-none place-items-center rounded-[var(--r-pill)] text-[var(--muted)] hover:text-[var(--accent)]"
+                              className="grid h-9 w-9 flex-none place-items-center rounded-[var(--r-pill)] text-[var(--muted)] hover:text-[var(--accent)]"
                             >
                               <RemoveIcon />
                             </button>
