@@ -11,6 +11,23 @@ interface OrderableListProps<T> {
 }
 
 /**
+ * Maps a raw drop-target row index — read from row positions in the
+ * ORIGINAL, pre-removal list ("drop before original row `rawTarget`") — to
+ * the FINAL index `moveItem(arr, from, to)` expects (post-removal array
+ * space; see its own doc example: `moveItem(['a','b','c','d'], 0, 2)` →
+ * `['b','c','a','d']`).
+ *
+ * Moving an item earlier (`rawTarget <= startIndex`) doesn't shift anything
+ * at or after the target, so the raw target is already the final index.
+ * Moving an item later (`rawTarget > startIndex`) removes the source first,
+ * which shifts every later index back by one, so the raw target must be
+ * decremented by one to land in the intended slot.
+ */
+export function finalDropIndex(startIndex: number, rawTarget: number): number {
+  return rawTarget > startIndex ? rawTarget - 1 : rawTarget;
+}
+
+/**
  * A small, self-contained vertical sortable list. Reordering happens two ways:
  *  - a pointer drag on each row's grip handle (mouse + touch, via the Pointer
  *    Events API — `touch-action: none` on the handle stops touch-drag from
@@ -73,8 +90,9 @@ export function OrderableList<T>({ items, getKey, getLabel, onReorder }: Orderab
     }
     dragRef.current = null;
     setDragIndex(null);
-    if (drag.currentIndex !== drag.startIndex) {
-      onReorder(drag.startIndex, drag.currentIndex);
+    const to = finalDropIndex(drag.startIndex, drag.currentIndex);
+    if (to !== drag.startIndex) {
+      onReorder(drag.startIndex, to);
     }
   }
 
