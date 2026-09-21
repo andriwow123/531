@@ -14,7 +14,15 @@ export type AssistanceCategory = 'push' | 'pull' | 'legs' | 'core';
 export interface AssistanceEntry { id?: number; date: string; category: AssistanceCategory; name: string; sets: number; reps: number; weight: number | null; }
 export interface CustomExercise { id?: number; category: AssistanceCategory; name: string; scheme?: string; }
 export interface HiddenSupporting { id?: number; category: AssistanceCategory; name: string; }
-export interface SupportingDone { id?: number; date: string; category: AssistanceCategory; name: string; }
+export interface SupportingDone {
+  id?: number;
+  date: string;
+  liftKey: LiftKey;
+  category: AssistanceCategory;
+  name: string;
+  weight: number | null;
+  reps: number | null;
+}
 
 export const profileRepo = {
   get: (): Promise<Profile | undefined> => db.profile.get('me'),
@@ -65,17 +73,35 @@ export const hiddenSupportingRepo = {
   all: (): Promise<HiddenSupporting[]> => db.hiddenSupporting.toArray(),
   remove: (id: number): Promise<void> => db.hiddenSupporting.delete(id),
 };
+function findMatch(date: string, liftKey: LiftKey, category: AssistanceCategory, name: string): Promise<SupportingDone | undefined> {
+  return db.supportingDone
+    .where('date')
+    .equals(date)
+    .filter((d) => d.liftKey === liftKey && d.category === category && d.name === name)
+    .first();
+}
+
 export const supportingDoneRepo = {
-  toggle: async (date: string, category: AssistanceCategory, name: string): Promise<void> => {
-    const existing = await db.supportingDone
-      .where('date')
-      .equals(date)
-      .filter((d) => d.category === category && d.name === name)
-      .first();
+  toggle: async (date: string, liftKey: LiftKey, category: AssistanceCategory, name: string): Promise<void> => {
+    const existing = await findMatch(date, liftKey, category, name);
     if (existing?.id !== undefined) {
       await db.supportingDone.delete(existing.id);
     } else {
-      await db.supportingDone.add({ date, category, name });
+      await db.supportingDone.add({ date, liftKey, category, name, weight: null, reps: null });
+    }
+  },
+  log: async (
+    date: string,
+    liftKey: LiftKey,
+    category: AssistanceCategory,
+    name: string,
+    patch: { weight?: number | null; reps?: number | null },
+  ): Promise<void> => {
+    const existing = await findMatch(date, liftKey, category, name);
+    if (existing?.id !== undefined) {
+      await db.supportingDone.update(existing.id, patch);
+    } else {
+      await db.supportingDone.add({ date, liftKey, category, name, weight: patch.weight ?? null, reps: patch.reps ?? null });
     }
   },
   forDate: (date: string): Promise<SupportingDone[]> => db.supportingDone.where('date').equals(date).toArray(),

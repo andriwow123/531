@@ -62,7 +62,7 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
   const bbbDone = done.some((d) => d.category === bbbCategory && d.name === BBB_NAME);
 
   async function toggleDone(category: AssistanceCategory, name: string) {
-    await supportingDoneRepo.toggle(todayIso(), category, name);
+    await supportingDoneRepo.toggle(todayIso(), liftKey, category, name);
     await load();
   }
 
