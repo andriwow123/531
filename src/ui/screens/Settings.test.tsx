@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { db } from '../../data/db';
-import { profileRepo, settingsRepo } from '../../data/repositories';
+import { cycleRepo, profileRepo, settingsRepo } from '../../data/repositories';
+import type { Cycle } from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
 import { SettingsProvider } from '../settings/SettingsContext';
 import Settings from './Settings';
@@ -26,7 +27,42 @@ async function seedProfile() {
   await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
 }
 
+async function seedCycle(): Promise<Cycle> {
+  const id = await cycleRepo.add({
+    index: 1,
+    startedAt: '2026-01-01',
+    status: 'active',
+    template: 'base',
+    fivesPro: false,
+    tm: { press: 50, bench: 72.5, squat: 120, deadlift: 152.5 },
+  });
+  return { ...(await cycleRepo.active()), id } as Cycle;
+}
+
 describe('Settings', () => {
+  it('shows a top-left Home link and top-right History + active Settings icon links', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    const homeLink = screen.getByRole('link', { name: 'Home' });
+    expect(homeLink.getAttribute('href')).toBe('/');
+    // Reads as a tappable button: home icon alongside the wordmark.
+    expect(homeLink.querySelector('svg')).toBeTruthy();
+    expect(homeLink.textContent).toContain('5/3/1');
+
+    const historyLink = screen.getByRole('link', { name: 'History' });
+    expect(historyLink.getAttribute('href')).toBe('/history');
+    expect(historyLink.getAttribute('aria-current')).toBeNull();
+
+    const settingsLink = screen.getByRole('link', { name: 'Settings' });
+    expect(settingsLink.getAttribute('href')).toBe('/settings');
+    expect(settingsLink.getAttribute('aria-current')).toBe('page');
+
+    expect(screen.queryByRole('link', { name: 'Today' })).toBeNull();
+  });
+
   it('changing Theme to Dark calls through updateSettings and persists', async () => {
     await seedProfile();
     renderSettings();
@@ -110,7 +146,7 @@ describe('Settings', () => {
     await waitFor(async () => expect((await settingsRepo.get()).bodyweightTracking).toBe(false));
   });
 
-  it('toggling Assistance tracking persists assistanceTracking', async () => {
+  it('toggling Supporting lifts persists assistanceTracking', async () => {
     await seedProfile();
     renderSettings();
 
@@ -120,12 +156,32 @@ describe('Settings', () => {
     // loaded settings once its mount-time load resolves; wait for the switch
     // to land in its loaded (checked, per defaultSettings.assistanceTracking=true)
     // state before clicking, to avoid racing the load (see notify tests above).
-    const assistanceTrackingSwitch = await screen.findByRole('switch', { name: /assistance tracking/i });
-    await waitFor(() => expect(assistanceTrackingSwitch).toBeChecked());
+    const supportingLiftsSwitch = await screen.findByRole('switch', { name: /supporting lifts/i });
+    await waitFor(() => expect(supportingLiftsSwitch).toBeChecked());
 
-    fireEvent.click(assistanceTrackingSwitch);
+    fireEvent.click(supportingLiftsSwitch);
 
     await waitFor(async () => expect((await settingsRepo.get()).assistanceTracking).toBe(false));
+  });
+
+  it('does not render a Plate breakdown toggle', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(screen.queryByText('Plate breakdown')).toBeNull();
+    expect(screen.queryByRole('switch', { name: /plate breakdown/i })).toBeNull();
+  });
+
+  it('does not render a Hide completed warm-ups toggle (retired — completed sets stay visible)', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(screen.queryByText('Hide completed warm-ups')).toBeNull();
+    expect(screen.queryByRole('switch', { name: /hide completed warm-ups/i })).toBeNull();
   });
 
   it('shows units and Training Max % read-only with an onboarding note', async () => {
@@ -140,6 +196,139 @@ describe('Settings', () => {
     expect(await screen.findByText('kg', { selector: 'span' })).toBeInTheDocument();
     expect(await screen.findByText('85%')).toBeInTheDocument();
     expect(screen.getByText(/onboarding/i)).toBeInTheDocument();
+  });
+
+  it('shows a Training maxes section with the active cycle\'s current TM for each lift', async () => {
+    await seedProfile();
+    await seedCycle();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(await screen.findByText('Training maxes')).toBeInTheDocument();
+
+    const press = (await screen.findByLabelText(/overhead press training max/i)) as HTMLInputElement;
+    const bench = screen.getByLabelText(/bench press training max/i) as HTMLInputElement;
+    const squat = screen.getByLabelText(/squat training max/i) as HTMLInputElement;
+    const deadlift = screen.getByLabelText(/deadlift training max/i) as HTMLInputElement;
+
+    expect(press.value).toBe('50');
+    expect(bench.value).toBe('72.5');
+    expect(squat.value).toBe('120');
+    expect(deadlift.value).toBe('152.5');
+  });
+
+  it('selects a training max input\'s content on focus, so typing replaces the value', async () => {
+    await seedProfile();
+    await seedCycle();
+    renderSettings();
+
+    const selectSpy = vi.spyOn(HTMLInputElement.prototype, 'select');
+
+    const squat = (await screen.findByLabelText(/squat training max/i)) as HTMLInputElement;
+    fireEvent.focus(squat);
+
+    expect(selectSpy).toHaveBeenCalled();
+    selectSpy.mockRestore();
+  });
+
+  it('editing a lift\'s training max and blurring persists via cycleRepo, leaving other lifts unchanged', async () => {
+    await seedProfile();
+    const cycle = await seedCycle();
+    renderSettings();
+
+    const squat = (await screen.findByLabelText(/squat training max/i)) as HTMLInputElement;
+    fireEvent.change(squat, { target: { value: '125' } });
+    fireEvent.blur(squat);
+
+    await waitFor(async () => {
+      const updated = await cycleRepo.active();
+      expect(updated?.tm.squat).toBe(125);
+    });
+
+    const updated = await cycleRepo.active();
+    expect(updated?.id).toBe(cycle.id);
+    expect(updated?.tm.press).toBe(50);
+    expect(updated?.tm.bench).toBe(72.5);
+    expect(updated?.tm.deadlift).toBe(152.5);
+  });
+
+  it('shows a muted empty state in Training maxes when there is no active cycle', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(await screen.findByText(/no active cycle/i)).toBeInTheDocument();
+  });
+
+  it('shows a Workout day order section listing the 4 lifts in liftOrder order', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(await screen.findByText('Workout day order')).toBeInTheDocument();
+
+    const upLabels = screen
+      .getAllByRole('button', { name: /^Move .* up$/i })
+      .map((btn) => btn.getAttribute('aria-label'));
+    expect(upLabels).toEqual([
+      'Move Overhead Press up',
+      'Move Bench Press up',
+      'Move Squat up',
+      'Move Deadlift up',
+    ]);
+  });
+
+  it('clicking Move down on the first lift reorders via moveItem semantics and persists liftOrder', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Move Overhead Press down' }));
+
+    await waitFor(async () => {
+      const saved = await settingsRepo.get();
+      expect(saved.liftOrder).toEqual(['bench', 'press', 'squat', 'deadlift']);
+    });
+
+    const upLabels = screen
+      .getAllByRole('button', { name: /^Move .* up$/i })
+      .map((btn) => btn.getAttribute('aria-label'));
+    expect(upLabels).toEqual([
+      'Move Bench Press up',
+      'Move Overhead Press up',
+      'Move Squat up',
+      'Move Deadlift up',
+    ]);
+  });
+
+  it('clicking Move up on the second lift produces the same reorder as Move down on the first', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Move Bench Press up' }));
+
+    await waitFor(async () => {
+      const saved = await settingsRepo.get();
+      expect(saved.liftOrder).toEqual(['bench', 'press', 'squat', 'deadlift']);
+    });
+  });
+
+  it('disables Move up on the first row and Move down on the last row', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(await screen.findByRole('button', { name: 'Move Overhead Press up' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move Deadlift down' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move Overhead Press down' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move Deadlift up' })).not.toBeDisabled();
   });
 });
 

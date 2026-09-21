@@ -12,7 +12,17 @@ export type StoredSettings = SettingsState & { id: 'app' };
 export interface BodyweightEntry { id?: number; date: string; weight: number; }
 export type AssistanceCategory = 'push' | 'pull' | 'legs' | 'core';
 export interface AssistanceEntry { id?: number; date: string; category: AssistanceCategory; name: string; sets: number; reps: number; weight: number | null; }
-export interface CustomExercise { id?: number; category: AssistanceCategory; name: string; }
+export interface CustomExercise { id?: number; category: AssistanceCategory; name: string; scheme?: string; }
+export interface HiddenSupporting { id?: number; category: AssistanceCategory; name: string; }
+export interface SupportingDone {
+  id?: number;
+  date: string;
+  liftKey: LiftKey;
+  category: AssistanceCategory;
+  name: string;
+  weight: number | null;
+  reps: number | null;
+}
 
 export const profileRepo = {
   get: (): Promise<Profile | undefined> => db.profile.get('me'),
@@ -28,6 +38,11 @@ export const cycleRepo = {
   add: (c: Cycle): Promise<number> => db.cycles.add(c),
   complete: (id: number): Promise<void> => db.cycles.update(id, { status: 'completed' }).then(() => {}),
   all: (): Promise<Cycle[]> => db.cycles.toArray(),
+  updateTrainingMax: async (cycleId: number, liftKey: LiftKey, tm: number): Promise<void> => {
+    const c = await db.cycles.get(cycleId);
+    if (!c) return;
+    await db.cycles.update(cycleId, { tm: { ...c.tm, [liftKey]: tm } });
+  },
 };
 export const sessionRepo = {
   forCycle: (cycleId: number): Promise<Session[]> => db.sessions.where('cycleId').equals(cycleId).toArray(),
@@ -56,4 +71,43 @@ export const assistanceRepo = {
 export const customExerciseRepo = {
   add: (c: CustomExercise) => db.customExercises.add(c),
   all: () => db.customExercises.toArray(),
+  remove: (id: number): Promise<void> => db.customExercises.delete(id),
+};
+export const hiddenSupportingRepo = {
+  add: (category: AssistanceCategory, name: string): Promise<number> => db.hiddenSupporting.add({ category, name }),
+  all: (): Promise<HiddenSupporting[]> => db.hiddenSupporting.toArray(),
+  remove: (id: number): Promise<void> => db.hiddenSupporting.delete(id),
+};
+function findMatch(date: string, liftKey: LiftKey, category: AssistanceCategory, name: string): Promise<SupportingDone | undefined> {
+  return db.supportingDone
+    .where('date')
+    .equals(date)
+    .filter((d) => d.liftKey === liftKey && d.category === category && d.name === name)
+    .first();
+}
+
+export const supportingDoneRepo = {
+  toggle: async (date: string, liftKey: LiftKey, category: AssistanceCategory, name: string): Promise<void> => {
+    const existing = await findMatch(date, liftKey, category, name);
+    if (existing?.id !== undefined) {
+      await db.supportingDone.delete(existing.id);
+    } else {
+      await db.supportingDone.add({ date, liftKey, category, name, weight: null, reps: null });
+    }
+  },
+  log: async (
+    date: string,
+    liftKey: LiftKey,
+    category: AssistanceCategory,
+    name: string,
+    patch: { weight?: number | null; reps?: number | null },
+  ): Promise<void> => {
+    const existing = await findMatch(date, liftKey, category, name);
+    if (existing?.id !== undefined) {
+      await db.supportingDone.update(existing.id, patch);
+    } else {
+      await db.supportingDone.add({ date, liftKey, category, name, weight: patch.weight ?? null, reps: patch.reps ?? null });
+    }
+  },
+  forDate: (date: string): Promise<SupportingDone[]> => db.supportingDone.where('date').equals(date).toArray(),
 };

@@ -42,14 +42,28 @@ async function seed() {
 }
 
 describe('History', () => {
-  it('shows the empty-state prompt and bottom nav when no sessions are logged', async () => {
+  it('shows the empty-state prompt and top-bar nav links when no sessions are logged', async () => {
     await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
 
     renderHistory();
 
     expect(await screen.findByText(/log a few workouts and your progress shows up here/i)).toBeTruthy();
-    expect(screen.getByText('Today')).toBeTruthy();
-    expect(screen.getByText('Settings')).toBeTruthy();
+
+    const homeLink = screen.getByRole('link', { name: 'Home' });
+    expect(homeLink.getAttribute('href')).toBe('/');
+    // Reads as a tappable button: home icon alongside the wordmark.
+    expect(homeLink.querySelector('svg')).toBeTruthy();
+    expect(homeLink.textContent).toContain('5/3/1');
+
+    const historyLink = screen.getByRole('link', { name: 'History' });
+    expect(historyLink.getAttribute('href')).toBe('/history');
+    expect(historyLink.getAttribute('aria-current')).toBe('page');
+
+    const settingsLink = screen.getByRole('link', { name: 'Settings' });
+    expect(settingsLink.getAttribute('href')).toBe('/settings');
+    expect(settingsLink.getAttribute('aria-current')).toBeNull();
+
+    expect(screen.queryByRole('link', { name: 'Today' })).toBeNull();
 
     // No lift cards or cycle log when there's nothing to show.
     expect(screen.queryByRole('heading', { name: 'Overhead Press' })).toBeNull();
@@ -84,6 +98,19 @@ describe('History', () => {
     // Cycle log section with the logged entry's top set.
     expect(screen.getByText('Cycle log')).toBeTruthy();
     expect(screen.getByText(/85 kg × 7/)).toBeTruthy();
+
+    // Top-bar nav links are present on the populated (non-empty-state) path too.
+    const homeLink = screen.getByRole('link', { name: 'Home' });
+    expect(homeLink.getAttribute('href')).toBe('/');
+
+    const historyLink = screen.getByRole('link', { name: 'History' });
+    expect(historyLink.getAttribute('href')).toBe('/history');
+    expect(historyLink.getAttribute('aria-current')).toBe('page');
+
+    const settingsLink = screen.getByRole('link', { name: 'Settings' });
+    expect(settingsLink.getAttribute('href')).toBe('/settings');
+
+    expect(screen.queryByRole('link', { name: 'Today' })).toBeNull();
   });
 
   it('always shows the PR callout and progress chart for a lift with data', async () => {

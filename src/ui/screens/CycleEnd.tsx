@@ -259,12 +259,11 @@ export default function CycleEnd() {
                   <label className="flex flex-col text-[12px] font-semibold text-[var(--muted)]">
                     New training max
                     <input
-                      type="number"
-                      step={0.5}
-                      min={0}
+                      type="text"
+                      inputMode="decimal"
                       aria-label={`New training max for ${row.liftName}`}
                       value={row.newTm}
-                      onChange={(e) => changeNewTm(row.liftKey, Number(e.target.value))}
+                      onChange={(e) => changeNewTm(row.liftKey, Number(e.target.value.replace(',', '.')))}
                       className="mt-1 w-24 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 text-center font-bold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                     />
                     {!(row.newTm > 0) && (

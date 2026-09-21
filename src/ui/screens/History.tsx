@@ -13,6 +13,7 @@ import type { Cycle, Lift, Session } from '../../data/repositories';
 import ProgressChart from '../components/ProgressChart';
 import BodyweightCard from '../components/BodyweightCard';
 import { useSettings } from '../settings/SettingsContext';
+import { NavIconLink, HistoryIcon, SettingsIcon, HomeIcon } from '../components/NavIcons';
 
 const LIFT_NAMES: Record<LiftKey, string> = {
   press: 'Overhead Press',
@@ -63,12 +64,28 @@ export default function History() {
     };
   }, []);
 
-  const bottomNav = (
-    <nav className="mt-5 flex items-center justify-around text-xs font-bold text-[var(--muted)]">
-      <Link to="/">Today</Link>
-      <span className="text-[var(--accent)]">History</span>
-      <Link to="/settings">Settings</Link>
-    </nav>
+  const header = (
+    <header className="mb-4 flex items-center justify-between gap-3">
+      <Link
+        to="/"
+        aria-label="Home"
+        className="inline-flex min-w-0 items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-1.5 hover:border-[var(--accent)] hover:text-[var(--accent)]"
+      >
+        <HomeIcon className="h-6 w-6 flex-none" />
+        <span className="min-w-0">
+          <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
+          <h2 className="text-[12px] font-semibold text-[var(--muted)]">Progress</h2>
+        </span>
+      </Link>
+      <div className="flex flex-none items-center gap-1.5">
+        <NavIconLink to="/history" label="History" active>
+          <HistoryIcon />
+        </NavIconLink>
+        <NavIconLink to="/settings" label="Settings">
+          <SettingsIcon />
+        </NavIconLink>
+      </div>
+    </header>
   );
 
   if (data === undefined) {
@@ -88,10 +105,7 @@ export default function History() {
     return (
       <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
         <div className="w-full max-w-md pb-4">
-          <header className="mb-4">
-            <div className="text-xs font-semibold text-[var(--muted)]">History</div>
-            <h1 className="text-[26px] font-extrabold leading-tight">Progress</h1>
-          </header>
+          {header}
 
           {settings.bodyweightTracking && (
             <div className="mb-4">
@@ -102,7 +116,6 @@ export default function History() {
           <p className="text-sm text-[var(--muted)]">
             Log a few workouts and your progress shows up here.
           </p>
-          {bottomNav}
         </div>
       </main>
     );
@@ -113,10 +126,7 @@ export default function History() {
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
       <div className="w-full max-w-md pb-4">
-        <header className="mb-4">
-          <div className="text-xs font-semibold text-[var(--muted)]">History</div>
-          <h1 className="text-[26px] font-extrabold leading-tight">Progress</h1>
-        </header>
+        {header}
 
         {settings.bodyweightTracking && (
           <div className="mb-4">
@@ -186,8 +196,6 @@ export default function History() {
             ))}
           </ul>
         </section>
-
-        {bottomNav}
       </div>
     </main>
   );

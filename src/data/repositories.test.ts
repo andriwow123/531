@@ -9,6 +9,8 @@ import {
   bodyweightRepo,
   assistanceRepo,
   customExerciseRepo,
+  hiddenSupportingRepo,
+  supportingDoneRepo,
 } from './repositories';
 import type { Cycle, Session } from './repositories';
 import { defaultSettings } from '../settings/schema';
@@ -48,6 +50,28 @@ describe('cycleRepo', () => {
 
     await cycleRepo.complete(id);
     expect(await cycleRepo.active()).toBeUndefined();
+  });
+});
+describe('cycleRepo.updateTrainingMax', () => {
+  it("updates one lift's tm and leaves the others unchanged", async () => {
+    const cycle: Cycle = {
+      index: 1,
+      startedAt: '2026-01-01',
+      status: 'active',
+      template: 'base',
+      fivesPro: false,
+      tm: { press: 60, bench: 85, squat: 119, deadlift: 150 },
+    };
+    const id = await cycleRepo.add(cycle);
+
+    await cycleRepo.updateTrainingMax(id, 'press', 65);
+
+    const active = await cycleRepo.active();
+    expect(active?.tm).toEqual({ press: 65, bench: 85, squat: 119, deadlift: 150 });
+  });
+
+  it('no-ops when the cycle id does not exist', async () => {
+    await expect(cycleRepo.updateTrainingMax(999, 'press', 65)).resolves.toBeUndefined();
   });
 });
 describe('sessionRepo', () => {
@@ -131,5 +155,75 @@ describe('customExerciseRepo', () => {
     const all = await customExerciseRepo.all();
     expect(all).toHaveLength(1);
     expect(all[0].name).toBe('JM Press');
+  });
+  it('supports an optional scheme field', async () => {
+    const id = await customExerciseRepo.add({ category: 'push', name: 'JM Press', scheme: '3 × 8' });
+    const all = await customExerciseRepo.all();
+    expect(all.find((c) => c.id === id)?.scheme).toBe('3 × 8');
+  });
+  it('removes a custom exercise', async () => {
+    const id = await customExerciseRepo.add({ category: 'push', name: 'JM Press' });
+    await customExerciseRepo.remove(id);
+    expect(await customExerciseRepo.all()).toHaveLength(0);
+  });
+});
+describe('hiddenSupportingRepo', () => {
+  it('adds, lists, and removes hidden built-ins', async () => {
+    const id = await hiddenSupportingRepo.add('push', 'Dips');
+    const all = await hiddenSupportingRepo.all();
+    expect(all).toHaveLength(1);
+    expect(all[0]).toMatchObject({ category: 'push', name: 'Dips' });
+
+    await hiddenSupportingRepo.remove(id);
+    expect(await hiddenSupportingRepo.all()).toHaveLength(0);
+  });
+});
+describe('supportingDoneRepo', () => {
+  it('toggles a done marker on then off, and lists via forDate', async () => {
+    await supportingDoneRepo.toggle('2026-02-01', 'press', 'push', 'Dips');
+    let forDay = await supportingDoneRepo.forDate('2026-02-01');
+    expect(forDay).toHaveLength(1);
+    expect(forDay[0]).toMatchObject({ date: '2026-02-01', liftKey: 'press', category: 'push', name: 'Dips' });
+
+    await supportingDoneRepo.toggle('2026-02-01', 'press', 'push', 'Dips');
+    forDay = await supportingDoneRepo.forDate('2026-02-01');
+    expect(forDay).toHaveLength(0);
+  });
+  it('only affects the matching date/liftKey/category/name entry', async () => {
+    await supportingDoneRepo.toggle('2026-02-01', 'press', 'push', 'Dips');
+    await supportingDoneRepo.toggle('2026-02-01', 'press', 'pull', 'Chin-ups');
+    expect(await supportingDoneRepo.forDate('2026-02-01')).toHaveLength(2);
+    expect(await supportingDoneRepo.forDate('2026-02-02')).toHaveLength(0);
+  });
+  it('toggle adds then removes a per-lift row with weight/reps null', async () => {
+    await supportingDoneRepo.toggle('2026-09-21', 'press', 'pull', 'Chin-ups');
+    let forDay = await supportingDoneRepo.forDate('2026-09-21');
+    expect(forDay).toHaveLength(1);
+    expect(forDay[0]).toMatchObject({ liftKey: 'press', weight: null, reps: null });
+
+    await supportingDoneRepo.toggle('2026-09-21', 'press', 'pull', 'Chin-ups');
+    forDay = await supportingDoneRepo.forDate('2026-09-21');
+    expect(forDay).toHaveLength(0);
+  });
+  it('keeps done state independent per lift for the same category/name', async () => {
+    await supportingDoneRepo.toggle('2026-09-21', 'press', 'pull', 'Chin-ups');
+    await supportingDoneRepo.toggle('2026-09-21', 'bench', 'pull', 'Chin-ups');
+    expect(await supportingDoneRepo.forDate('2026-09-21')).toHaveLength(2);
+
+    await supportingDoneRepo.toggle('2026-09-21', 'press', 'pull', 'Chin-ups');
+    const forDay = await supportingDoneRepo.forDate('2026-09-21');
+    expect(forDay).toHaveLength(1);
+    expect(forDay[0]).toMatchObject({ liftKey: 'bench', category: 'pull', name: 'Chin-ups' });
+  });
+  it('log upserts weight/reps, creating a done row and patching fields independently', async () => {
+    await supportingDoneRepo.log('2026-09-21', 'press', 'pull', 'Chin-ups', { weight: 20, reps: 12 });
+    let forDay = await supportingDoneRepo.forDate('2026-09-21');
+    expect(forDay).toHaveLength(1);
+    expect(forDay[0]).toMatchObject({ liftKey: 'press', category: 'pull', name: 'Chin-ups', weight: 20, reps: 12 });
+
+    await supportingDoneRepo.log('2026-09-21', 'press', 'pull', 'Chin-ups', { reps: 10 });
+    forDay = await supportingDoneRepo.forDate('2026-09-21');
+    expect(forDay).toHaveLength(1);
+    expect(forDay[0]).toMatchObject({ weight: 20, reps: 10 });
   });
 });

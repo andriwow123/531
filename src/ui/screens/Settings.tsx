@@ -1,12 +1,22 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import type { Unit, TemplateKey } from '../../domain';
-import { profileRepo } from '../../data/repositories';
-import type { Profile } from '../../data/repositories';
+import type { Unit, TemplateKey, LiftKey } from '../../domain';
+import { orderedLifts, moveItem } from '../../domain';
+import { cycleRepo, profileRepo } from '../../data/repositories';
+import type { Cycle, Profile } from '../../data/repositories';
 import { resolveDisplay } from '../../settings/display';
 import type { DisplayPreset, DisplayElement } from '../../settings/schema';
 import { useSettings } from '../settings/SettingsContext';
+import { NavIconLink, HistoryIcon, SettingsIcon, HomeIcon } from '../components/NavIcons';
+import { OrderableList } from '../components/OrderableList';
+
+const LIFT_NAMES: Record<LiftKey, string> = {
+  press: 'Overhead Press',
+  bench: 'Bench Press',
+  squat: 'Squat',
+  deadlift: 'Deadlift',
+};
 
 const DISPLAY_PRESETS: { value: DisplayPreset; label: string }[] = [
   { value: 'simple', label: 'Simple' },
@@ -201,6 +211,13 @@ export default function Settings() {
   const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
 
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [cycle, setCycle] = useState<Cycle | null | undefined>(undefined);
+  const [tmInputs, setTmInputs] = useState<Record<LiftKey, string>>({
+    press: '',
+    bench: '',
+    squat: '',
+    deadlift: '',
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -211,6 +228,37 @@ export default function Settings() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    cycleRepo.active().then((c) => {
+      if (cancelled) return;
+      setCycle(c ?? null);
+      if (c) {
+        setTmInputs({
+          press: String(c.tm.press),
+          bench: String(c.tm.bench),
+          squat: String(c.tm.squat),
+          deadlift: String(c.tm.deadlift),
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function changeTmInput(key: LiftKey, value: string) {
+    setTmInputs((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function saveTm(key: LiftKey) {
+    if (!cycle || cycle.id == null) return;
+    const value = Number((tmInputs[key] ?? '').replace(',', '.'));
+    if (!Number.isFinite(value) || value <= 0) return;
+    await cycleRepo.updateTrainingMax(cycle.id, key, value);
+    setCycle({ ...cycle, tm: { ...cycle.tm, [key]: value } });
+  }
 
   function toggleDisplay(el: DisplayElement) {
     updateSettings({
@@ -244,6 +292,11 @@ export default function Settings() {
     updateSettings({ restTimer: { ...settings.restTimer, notify: next } });
   }
 
+  function reorderLifts(from: number, to: number) {
+    const next = moveItem(orderedLifts(settings.liftOrder), from, to);
+    updateSettings({ liftOrder: next });
+  }
+
   function changeRestSeconds(dir: 1 | -1) {
     const next = Math.min(
       REST_SECONDS_MAX,
@@ -259,9 +312,26 @@ export default function Settings() {
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
       <div className="w-full max-w-md pb-4">
-        <header className="mb-4">
-          <div className="text-xs font-semibold text-[var(--muted)]">Preferences</div>
-          <h1 className="text-[26px] font-extrabold leading-tight">Settings</h1>
+        <header className="mb-4 flex items-center justify-between gap-3">
+          <Link
+            to="/"
+            aria-label="Home"
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-1.5 hover:border-[var(--accent)] hover:text-[var(--accent)]"
+          >
+            <HomeIcon className="h-6 w-6 flex-none" />
+            <span className="min-w-0">
+              <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
+              <h2 className="text-[12px] font-semibold text-[var(--muted)]">Settings</h2>
+            </span>
+          </Link>
+          <div className="flex flex-none items-center gap-1.5">
+            <NavIconLink to="/history" label="History">
+              <HistoryIcon />
+            </NavIconLink>
+            <NavIconLink to="/settings" label="Settings" active>
+              <SettingsIcon />
+            </NavIconLink>
+          </div>
         </header>
 
         <div className="flex flex-col gap-3">
@@ -270,11 +340,6 @@ export default function Settings() {
               value={settings.displayPreset}
               options={DISPLAY_PRESETS}
               onChange={(v) => updateSettings({ displayPreset: v })}
-            />
-            <ToggleRow
-              label="Plate breakdown"
-              checked={display.plateBreakdown}
-              onChange={() => toggleDisplay('plateBreakdown')}
             />
             <ToggleRow
               label="Rest timer widget"
@@ -288,11 +353,6 @@ export default function Settings() {
               onChange={() => toggleDisplay('warmups')}
             />
             <ToggleRow
-              label="Hide completed warm-ups"
-              checked={settings.hideCompletedWarmups}
-              onChange={() => updateSettings({ hideCompletedWarmups: !settings.hideCompletedWarmups })}
-            />
-            <ToggleRow
               label="Exercise demos"
               checked={settings.exerciseDemos}
               onChange={() => updateSettings({ exerciseDemos: !settings.exerciseDemos })}
@@ -303,7 +363,7 @@ export default function Settings() {
               onChange={() => updateSettings({ bodyweightTracking: !settings.bodyweightTracking })}
             />
             <ToggleRow
-              label="Assistance tracking"
+              label="Supporting lifts"
               checked={settings.assistanceTracking}
               onChange={() => updateSettings({ assistanceTracking: !settings.assistanceTracking })}
             />
@@ -381,6 +441,45 @@ export default function Settings() {
             )}
           </Section>
 
+          <Section title="Training maxes">
+            {cycle === null ? (
+              <p className="text-sm text-[var(--muted)]">No active cycle yet.</p>
+            ) : cycle ? (
+              orderedLifts(settings.liftOrder).map((key) => (
+                <div key={key} className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">{LIFT_NAMES[key]}</span>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      id={`tm-${key}`}
+                      aria-label={`${LIFT_NAMES[key]} training max`}
+                      type="text"
+                      inputMode="decimal"
+                      value={tmInputs[key]}
+                      onChange={(e) => changeTmInput(key, e.target.value)}
+                      onBlur={() => saveTm(key)}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="w-20 rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-right text-sm font-bold tabular-nums text-[var(--text)]"
+                    />
+                    <span className="text-sm font-bold text-[var(--muted)]">
+                      {profile ? profile.units : ''}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-[var(--muted)]">Loading…</p>
+            )}
+          </Section>
+
+          <Section title="Workout day order">
+            <OrderableList
+              items={orderedLifts(settings.liftOrder)}
+              getKey={(key) => key}
+              getLabel={(key) => LIFT_NAMES[key]}
+              onReorder={reorderLifts}
+            />
+          </Section>
+
           <Section title="Profile">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-semibold">Units</span>
@@ -399,12 +498,6 @@ export default function Settings() {
             </p>
           </Section>
         </div>
-
-        <nav className="mt-5 flex items-center justify-around text-xs font-bold text-[var(--muted)]">
-          <Link to="/">Today</Link>
-          <Link to="/history">History</Link>
-          <span className="text-[var(--accent)]">Settings</span>
-        </nav>
       </div>
     </main>
   );

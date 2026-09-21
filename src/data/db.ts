@@ -8,6 +8,8 @@ import type {
   BodyweightEntry,
   AssistanceEntry,
   CustomExercise,
+  HiddenSupporting,
+  SupportingDone,
 } from './repositories';
 
 export class AppDB extends Dexie {
@@ -19,6 +21,8 @@ export class AppDB extends Dexie {
   bodyweight!: Table<BodyweightEntry, number>;
   assistance!: Table<AssistanceEntry, number>;
   customExercises!: Table<CustomExercise, number>;
+  supportingDone!: Table<SupportingDone, number>;
+  hiddenSupporting!: Table<HiddenSupporting, number>;
   constructor() {
     super('fivethreeone');
     this.version(1).stores({
@@ -30,6 +34,7 @@ export class AppDB extends Dexie {
     this.version(2).stores({ settings: 'id' });
     this.version(3).stores({ bodyweight: '++id, date' });
     this.version(4).stores({ assistance: '++id, date', customExercises: '++id, category' });
+    this.version(5).stores({ supportingDone: '++id, date', hiddenSupporting: '++id, category' });
   }
 }
 export const db = new AppDB();

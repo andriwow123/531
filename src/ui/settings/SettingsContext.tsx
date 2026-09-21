@@ -7,12 +7,19 @@ import type { SettingsState } from '../../settings/schema';
 export interface SettingsContextValue {
   settings: SettingsState;
   updateSettings: (patch: Partial<SettingsState>) => void;
+  /** True once the mount-time load from storage has resolved (settings may
+   *  still be `defaultSettings` if nothing was ever saved). Consumers that
+   *  need to act on the LOADED settings exactly once — rather than racing
+   *  the default values a synchronous first render sees — should gate on
+   *  this instead of assuming `settings` is already final. */
+  loaded: boolean;
 }
 
 const SettingsContext = createContext<SettingsContextValue | undefined>(undefined);
 
 export function SettingsProvider(props: { children: ReactNode }) {
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
+  const [loaded, setLoaded] = useState(false);
   const loadedRef = useRef(false);
   // Tracks the latest committed settings for reads only (mutated during render,
   // never used to compute the next state) so the mount-load below can tell
@@ -23,7 +30,7 @@ export function SettingsProvider(props: { children: ReactNode }) {
   // mount load
   useEffect(() => {
     let cancelled = false;
-    settingsRepo.get().then((loaded) => {
+    settingsRepo.get().then((loadedSettings) => {
       if (cancelled) return;
       const editedBeforeLoad = settingsRef.current !== defaultSettings;
       loadedRef.current = true;
@@ -33,8 +40,9 @@ export function SettingsProvider(props: { children: ReactNode }) {
         // it with the now-stale on-disk snapshot we just read.
         void settingsRepo.save(settingsRef.current);
       } else {
-        setSettings(loaded);
+        setSettings(loadedSettings);
       }
+      setLoaded(true);
     });
     return () => {
       cancelled = true;
@@ -60,7 +68,11 @@ export function SettingsProvider(props: { children: ReactNode }) {
   const updateSettings = (patch: Partial<SettingsState>) =>
     setSettings((prev) => ({ ...prev, ...patch }));
 
-  return <SettingsContext.Provider value={{ settings, updateSettings }}>{props.children}</SettingsContext.Provider>;
+  return (
+    <SettingsContext.Provider value={{ settings, updateSettings, loaded }}>
+      {props.children}
+    </SettingsContext.Provider>
+  );
 }
 
 export function useSettings(): SettingsContextValue {
