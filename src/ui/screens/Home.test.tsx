@@ -82,6 +82,18 @@ describe('Home', () => {
     expect(settingsLink.getAttribute('aria-current')).toBeNull();
   });
 
+  it('declutters the header — no "Wendler strength cycle" subtitle and no protocol/done-this-week line', async () => {
+    await seed();
+    renderHome();
+
+    await waitForLoaded();
+
+    expect(screen.queryByText('Wendler strength cycle')).toBeNull();
+    expect(screen.queryByText(/done this week/)).toBeNull();
+    expect(screen.queryByText(/5×5\/5\/5\+ · 65\/75\/85%/)).toBeNull();
+    expect(screen.queryByText(/Deload · 40\/50\/60%, no AMRAP/)).toBeNull();
+  });
+
   it('WeekTabs switches the shown week — deload has no AMRAP set, week 1 does', async () => {
     await seed();
     renderHome();
@@ -91,7 +103,6 @@ describe('Home', () => {
     // Week 1 (default) is an AMRAP week — every lift's top set is "as many
     // reps as possible"; there are 4 cards, so 4 occurrences.
     expect(screen.getAllByText('as many reps as possible')).toHaveLength(4);
-    expect(screen.getByText(/5×5\/5\/5\+ · 65\/75\/85%/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Deload/ }));
 
@@ -99,7 +110,6 @@ describe('Home', () => {
     await waitFor(() => {
       expect(screen.queryByText('as many reps as possible')).toBeNull();
     });
-    expect(screen.getByText(/Deload · 40\/50\/60%, no AMRAP/)).toBeTruthy();
   });
 
   it('shows a lift already logged this week as read-only, via the session resolved by Home', async () => {

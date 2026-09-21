@@ -13,14 +13,6 @@ import WeekTabs from '../components/WeekTabs';
 import DayStrip from '../components/DayStrip';
 import { NavIconLink, HistoryIcon, SettingsIcon, HomeIcon } from '../components/NavIcons';
 
-/** One-line standard 5/3/1 scheme description per week, shown under the title row. */
-const PROTOCOL: Record<WeekNumber, string> = {
-  1: '5×5/5/5+ · 65/75/85%',
-  2: '3×3/3/3+ · 70/80/90%',
-  3: '5/3/1+ · 75/85/95%',
-  4: 'Deload · 40/50/60%, no AMRAP',
-};
-
 /** Short day-strip labels per lift, distinct from LiftCard's fuller exercise names. */
 const DAY_LABEL: Record<LiftKey, string> = {
   press: 'Press',
@@ -248,21 +240,19 @@ export default function Home() {
       data.sessions.some((s) => s.status === 'done' && s.liftKey === key && s.week === selectedWeek),
     ),
   );
-  const doneCount = doneKeys.size;
 
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
       <div className="w-full max-w-md pb-4">
-        <header className="mb-3 flex items-center justify-between gap-3">
+        <header className="mb-4 flex items-center justify-between gap-3">
           <Link
             to="/"
             aria-label="Home"
-            className="inline-flex min-w-0 items-center gap-1.5 rounded-[var(--r-pill)] -mx-1 px-2 py-1 hover:bg-[var(--surface-2)]"
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-1.5 hover:border-[var(--accent)] hover:text-[var(--accent)]"
           >
-            <HomeIcon className="h-5 w-5 flex-none text-[var(--muted)]" />
+            <HomeIcon className="h-6 w-6 flex-none" />
             <span className="min-w-0">
               <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
-              <p className="text-[12px] font-semibold text-[var(--muted)]">Wendler strength cycle</p>
             </span>
           </Link>
           <div className="flex flex-none items-center gap-1.5">
@@ -277,10 +267,6 @@ export default function Home() {
             </NavIconLink>
           </div>
         </header>
-
-        <p className="mb-4 text-[13px] font-semibold text-[var(--muted)]">
-          {PROTOCOL[selectedWeek]} · {doneCount} of 4 done this week
-        </p>
 
         <div className="mb-4">
           <WeekTabs week={selectedWeek} onChange={setSelectedWeek} />

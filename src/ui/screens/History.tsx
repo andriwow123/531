@@ -69,9 +69,9 @@ export default function History() {
       <Link
         to="/"
         aria-label="Home"
-        className="inline-flex min-w-0 items-center gap-1.5 rounded-[var(--r-pill)] -mx-1 px-2 py-1 hover:bg-[var(--surface-2)]"
+        className="inline-flex min-w-0 items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-1.5 hover:border-[var(--accent)] hover:text-[var(--accent)]"
       >
-        <HomeIcon className="h-5 w-5 flex-none text-[var(--muted)]" />
+        <HomeIcon className="h-6 w-6 flex-none" />
         <span className="min-w-0">
           <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
           <h2 className="text-[12px] font-semibold text-[var(--muted)]">Progress</h2>
