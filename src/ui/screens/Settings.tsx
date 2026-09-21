@@ -8,7 +8,7 @@ import type { Cycle, Profile } from '../../data/repositories';
 import { resolveDisplay } from '../../settings/display';
 import type { DisplayPreset, DisplayElement } from '../../settings/schema';
 import { useSettings } from '../settings/SettingsContext';
-import { NavIconLink, HistoryIcon, SettingsIcon } from '../components/NavIcons';
+import { NavIconLink, HistoryIcon, SettingsIcon, HomeIcon } from '../components/NavIcons';
 import { OrderableList } from '../components/OrderableList';
 
 const LIFT_NAMES: Record<LiftKey, string> = {
@@ -313,9 +313,16 @@ export default function Settings() {
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
       <div className="w-full max-w-md pb-4">
         <header className="mb-4 flex items-center justify-between gap-3">
-          <Link to="/" aria-label="Home" className="min-w-0">
-            <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
-            <h2 className="text-[12px] font-semibold text-[var(--muted)]">Settings</h2>
+          <Link
+            to="/"
+            aria-label="Home"
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-[var(--r-pill)] -mx-1 px-2 py-1 hover:bg-[var(--surface-2)]"
+          >
+            <HomeIcon className="h-5 w-5 flex-none text-[var(--muted)]" />
+            <span className="min-w-0">
+              <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
+              <h2 className="text-[12px] font-semibold text-[var(--muted)]">Settings</h2>
+            </span>
           </Link>
           <div className="flex flex-none items-center gap-1.5">
             <NavIconLink to="/history" label="History">
@@ -451,6 +458,7 @@ export default function Settings() {
                       value={tmInputs[key]}
                       onChange={(e) => changeTmInput(key, e.target.value)}
                       onBlur={() => saveTm(key)}
+                      onFocus={(e) => e.currentTarget.select()}
                       className="w-20 rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-right text-sm font-bold tabular-nums text-[var(--text)]"
                     />
                     <span className="text-sm font-bold text-[var(--muted)]">

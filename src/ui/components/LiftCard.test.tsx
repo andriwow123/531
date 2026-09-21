@@ -129,6 +129,35 @@ describe('LiftCard', () => {
     expect(screen.queryByRole('button', { name: 'Edit training max' })).toBeNull();
   });
 
+  it('gives two same-kind/same-weight logged checkmarks distinct aria-labels', async () => {
+    const cycle = await seedCycle();
+    await sessionRepo.add({
+      cycleId: cycle.id as number,
+      week: 1,
+      liftKey: 'deadlift',
+      date: '2026-01-01',
+      status: 'done',
+      sets: [
+        { targetReps: 5, weight: 100, actualReps: 5, done: true, isAmrap: false, kind: 'main' },
+        { targetReps: 5, weight: 100, actualReps: 5, done: true, isAmrap: false, kind: 'main' },
+      ],
+      amrapReps: null,
+      estimated1RM: null,
+      rpe: null,
+      notes: '',
+    });
+
+    renderCard(cycle);
+
+    expect(await screen.findByText(/logged/i)).toBeTruthy();
+
+    // Same kind, same weight — previously identical labels; now disambiguated
+    // by row position, and each resolves to exactly one element.
+    expect(screen.getByLabelText('work set 1 (100kg) logged')).toBeTruthy();
+    expect(screen.getByLabelText('work set 2 (100kg) logged')).toBeTruthy();
+    expect(screen.getAllByLabelText(/logged$/i)).toHaveLength(2);
+  });
+
   it('shows an editable training max for an unlogged lift; saving persists the new tm and notifies the parent', async () => {
     const cycle = await seedCycle();
     const onTmChange = vi.fn();
@@ -153,6 +182,27 @@ describe('LiftCard', () => {
     expect(updated?.tm.press).toBe(100); // unaffected lift
   });
 
+  it('autofocuses the training max editor input on open and selects its content on focus', async () => {
+    const cycle = await seedCycle();
+    renderCard(cycle);
+
+    const selectSpy = vi.spyOn(HTMLInputElement.prototype, 'select');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit training max' }));
+
+    const input = screen.getByLabelText('training-max-deadlift') as HTMLInputElement;
+
+    // Opening the editor moves focus straight to the input (autoFocus).
+    expect(document.activeElement).toBe(input);
+
+    // Focusing it (whether via autoFocus or a later click) selects its
+    // current value, so typing overwrites rather than appends.
+    fireEvent.focus(input);
+    expect(selectSpy).toHaveBeenCalled();
+
+    selectSpy.mockRestore();
+  });
+
   it('cancelling the training max editor discards the change', async () => {
     const cycle = await seedCycle();
     renderCard(cycle);
@@ -168,13 +218,20 @@ describe('LiftCard', () => {
     expect(unchanged?.tm.deadlift).toBe(140);
   });
 
-  it('renders the weight numbers with a fixed-width, right-aligned span for row alignment', async () => {
+  it('renders the weight numbers with a fixed-width, center-aligned span for row alignment', async () => {
     const cycle = await seedCycle();
     const { container } = renderCard(cycle);
     await screen.findByRole('heading', { name: 'Deadlift' });
 
-    const weightSpans = container.querySelectorAll('span.tabular-nums.text-right');
+    // The weight-number spans are centered within their fixed-width column
+    // (not right-aligned — that read off-center); the reps/plate columns to
+    // their right keep their own separate right-alignment untouched.
+    const weightSpans = container.querySelectorAll('span.tabular-nums.text-center');
     expect(weightSpans.length).toBeGreaterThan(0);
+    weightSpans.forEach((span) => {
+      expect(span.className).toMatch(/w-\[(7\.5rem|5rem)\]/);
+    });
+    expect(container.querySelectorAll('span.tabular-nums.text-right').length).toBe(0);
   });
 
   it('shows exercise demo and supporting lifts affordances when enabled', async () => {

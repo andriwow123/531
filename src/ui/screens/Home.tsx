@@ -11,7 +11,7 @@ import { useRestTimer } from '../hooks/useRestTimer';
 import LiftCard from '../components/LiftCard';
 import WeekTabs from '../components/WeekTabs';
 import DayStrip from '../components/DayStrip';
-import { NavIconLink, HistoryIcon, SettingsIcon } from '../components/NavIcons';
+import { NavIconLink, HistoryIcon, SettingsIcon, HomeIcon } from '../components/NavIcons';
 
 /** One-line standard 5/3/1 scheme description per week, shown under the title row. */
 const PROTOCOL: Record<WeekNumber, string> = {
@@ -221,9 +221,16 @@ export default function Home() {
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
       <div className="w-full max-w-md pb-4">
         <header className="mb-3 flex items-center justify-between gap-3">
-          <Link to="/" aria-label="Home" className="min-w-0">
-            <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
-            <p className="text-[12px] font-semibold text-[var(--muted)]">Wendler strength cycle</p>
+          <Link
+            to="/"
+            aria-label="Home"
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-[var(--r-pill)] -mx-1 px-2 py-1 hover:bg-[var(--surface-2)]"
+          >
+            <HomeIcon className="h-5 w-5 flex-none text-[var(--muted)]" />
+            <span className="min-w-0">
+              <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
+              <p className="text-[12px] font-semibold text-[var(--muted)]">Wendler strength cycle</p>
+            </span>
           </Link>
           <div className="flex flex-none items-center gap-1.5">
             <span className="flex-none rounded-[var(--r-pill)] bg-[var(--accent-soft)] px-2.5 py-1 text-[12px] font-extrabold text-[var(--accent)]">

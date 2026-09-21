@@ -69,6 +69,9 @@ describe('Home', () => {
 
     const homeLink = screen.getByRole('link', { name: 'Home' });
     expect(homeLink.getAttribute('href')).toBe('/');
+    // Reads as a tappable button: home icon alongside the wordmark.
+    expect(homeLink.querySelector('svg')).toBeTruthy();
+    expect(homeLink.textContent).toContain('5/3/1');
 
     const historyLink = screen.getByRole('link', { name: 'History' });
     expect(historyLink.getAttribute('href')).toBe('/history');

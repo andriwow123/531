@@ -268,7 +268,7 @@ export default function LiftCard({
     const repsLabel = s.isAmrap
       ? `${s.done && s.actualReps != null ? s.actualReps : s.targetReps} reps`
       : `×${s.targetReps}`;
-    const checkLabel = `${KIND_LABEL[s.kind]} set (${s.weight}${unit}) logged`;
+    const checkLabel = `${KIND_LABEL[s.kind]} set ${i + 1} (${s.weight}${unit}) logged`;
     const checkClasses =
       'grid h-[22px] w-[22px] flex-none place-items-center rounded-full text-xs font-extrabold ' +
       (s.done ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--line)] text-transparent');
@@ -282,7 +282,7 @@ export default function LiftCard({
               <div className="text-[12px] font-semibold opacity-80">{pct}%</div>
             </div>
             <div className="flex flex-1 items-baseline justify-center gap-1">
-              <span className="inline-block w-[7.5rem] text-right text-[40px] font-extrabold leading-none tabular-nums">
+              <span className="inline-block w-[7.5rem] text-center text-[40px] font-extrabold leading-none tabular-nums">
                 {s.weight}
               </span>
               <span className="text-[13px] font-bold">{unit}</span>
@@ -306,7 +306,7 @@ export default function LiftCard({
           <div className="text-[12px] font-semibold text-[var(--muted)]">{pct}%</div>
         </div>
         <div className="flex flex-1 items-baseline justify-center gap-1">
-          <span className="inline-block w-[5rem] text-right text-[26px] font-extrabold tabular-nums">
+          <span className="inline-block w-[5rem] text-center text-[26px] font-extrabold tabular-nums">
             {s.weight}
           </span>
           <span className="text-[12px] font-semibold text-[var(--muted)]">{unit}</span>
@@ -344,6 +344,8 @@ export default function LiftCard({
                   min={0}
                   value={tmInput}
                   onChange={(e) => setTmInput(e.target.value)}
+                  onFocus={(e) => e.currentTarget.select()}
+                  autoFocus
                   className="w-16 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-right text-sm font-extrabold tabular-nums text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
                 />
                 <button
@@ -445,7 +447,7 @@ export default function LiftCard({
                       <div className="text-[12px] font-semibold opacity-80">{pct}%</div>
                     </div>
                     <div className="flex flex-1 items-baseline justify-center gap-1">
-                      <span className="inline-block w-[7.5rem] text-right text-[40px] font-extrabold leading-none tabular-nums">
+                      <span className="inline-block w-[7.5rem] text-center text-[40px] font-extrabold leading-none tabular-nums">
                         {set.weight}
                       </span>
                       <span className="text-[13px] font-bold">{unit}</span>
@@ -507,7 +509,7 @@ export default function LiftCard({
                   <div className="text-[12px] font-semibold text-[var(--muted)]">{pct}%</div>
                 </div>
                 <div className="flex flex-1 items-baseline justify-center gap-1">
-                  <span className="inline-block w-[5rem] text-right text-[26px] font-extrabold tabular-nums">
+                  <span className="inline-block w-[5rem] text-center text-[26px] font-extrabold tabular-nums">
                     {set.weight}
                   </span>
                   <span className="text-[12px] font-semibold text-[var(--muted)]">{unit}</span>

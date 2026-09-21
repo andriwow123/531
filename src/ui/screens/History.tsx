@@ -13,7 +13,7 @@ import type { Cycle, Lift, Session } from '../../data/repositories';
 import ProgressChart from '../components/ProgressChart';
 import BodyweightCard from '../components/BodyweightCard';
 import { useSettings } from '../settings/SettingsContext';
-import { NavIconLink, HistoryIcon, SettingsIcon } from '../components/NavIcons';
+import { NavIconLink, HistoryIcon, SettingsIcon, HomeIcon } from '../components/NavIcons';
 
 const LIFT_NAMES: Record<LiftKey, string> = {
   press: 'Overhead Press',
@@ -66,9 +66,16 @@ export default function History() {
 
   const header = (
     <header className="mb-4 flex items-center justify-between gap-3">
-      <Link to="/" aria-label="Home" className="min-w-0">
-        <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
-        <h2 className="text-[12px] font-semibold text-[var(--muted)]">Progress</h2>
+      <Link
+        to="/"
+        aria-label="Home"
+        className="inline-flex min-w-0 items-center gap-1.5 rounded-[var(--r-pill)] -mx-1 px-2 py-1 hover:bg-[var(--surface-2)]"
+      >
+        <HomeIcon className="h-5 w-5 flex-none text-[var(--muted)]" />
+        <span className="min-w-0">
+          <h1 className="text-[22px] font-extrabold leading-tight">5/3/1</h1>
+          <h2 className="text-[12px] font-semibold text-[var(--muted)]">Progress</h2>
+        </span>
       </Link>
       <div className="flex flex-none items-center gap-1.5">
         <NavIconLink to="/history" label="History" active>

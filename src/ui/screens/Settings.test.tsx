@@ -48,6 +48,9 @@ describe('Settings', () => {
 
     const homeLink = screen.getByRole('link', { name: 'Home' });
     expect(homeLink.getAttribute('href')).toBe('/');
+    // Reads as a tappable button: home icon alongside the wordmark.
+    expect(homeLink.querySelector('svg')).toBeTruthy();
+    expect(homeLink.textContent).toContain('5/3/1');
 
     const historyLink = screen.getByRole('link', { name: 'History' });
     expect(historyLink.getAttribute('href')).toBe('/history');
@@ -213,6 +216,20 @@ describe('Settings', () => {
     expect(bench.value).toBe('72.5');
     expect(squat.value).toBe('120');
     expect(deadlift.value).toBe('152.5');
+  });
+
+  it('selects a training max input\'s content on focus, so typing replaces the value', async () => {
+    await seedProfile();
+    await seedCycle();
+    renderSettings();
+
+    const selectSpy = vi.spyOn(HTMLInputElement.prototype, 'select');
+
+    const squat = (await screen.findByLabelText(/squat training max/i)) as HTMLInputElement;
+    fireEvent.focus(squat);
+
+    expect(selectSpy).toHaveBeenCalled();
+    selectSpy.mockRestore();
   });
 
   it('editing a lift\'s training max and blurring persists via cycleRepo, leaving other lifts unchanged', async () => {
