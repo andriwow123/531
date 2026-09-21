@@ -346,11 +346,6 @@ export default function Settings() {
               onChange={() => toggleDisplay('warmups')}
             />
             <ToggleRow
-              label="Hide completed warm-ups"
-              checked={settings.hideCompletedWarmups}
-              onChange={() => updateSettings({ hideCompletedWarmups: !settings.hideCompletedWarmups })}
-            />
-            <ToggleRow
               label="Exercise demos"
               checked={settings.exerciseDemos}
               onChange={() => updateSettings({ exerciseDemos: !settings.exerciseDemos })}

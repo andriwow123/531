@@ -251,9 +251,76 @@ export default function LiftCard({
 
   const tm = cycle.tm[liftKey];
 
-  const visibleRows = rows
-    .map((row, index) => ({ row, index }))
-    .filter(({ row }) => !(settings.hideCompletedWarmups && row.set.kind === 'warmup' && row.done));
+  // Completed sets (including warm-ups) always stay visible with a
+  // checkmark — the old `hideCompletedWarmups` hide-on-done behavior is
+  // retired.
+  const visibleRows = rows.map((row, index) => ({ row, index }));
+
+  /**
+   * Read-only row for an already-logged set (rendered once
+   * `existingSession != null`): same visual idiom as the interactive rows,
+   * but with no Done button / reps input — just weight, plates, reps and a
+   * checkmark.
+   */
+  function renderLoggedRow(s: LoggedSet, i: number) {
+    const pct = Math.round((s.weight / tm) * 100);
+    const plateText = formatPlates(s.weight, unit);
+    const repsLabel = s.isAmrap
+      ? `${s.done && s.actualReps != null ? s.actualReps : s.targetReps} reps`
+      : `×${s.targetReps}`;
+    const checkLabel = `${KIND_LABEL[s.kind]} set (${s.weight}${unit}) logged`;
+    const checkClasses =
+      'grid h-[22px] w-[22px] flex-none place-items-center rounded-full text-xs font-extrabold ' +
+      (s.done ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--line)] text-transparent');
+
+    if (s.isAmrap) {
+      return (
+        <li key={i} className="rounded-[var(--r-hero)] bg-[var(--surface-2)] p-4 text-[var(--text)]">
+          <div className="flex items-center gap-3">
+            <div className="w-16 flex-none">
+              <div className="text-[13px] font-bold">{KIND_LABEL[s.kind]}</div>
+              <div className="text-[12px] font-semibold opacity-80">{pct}%</div>
+            </div>
+            <div className="flex flex-1 items-baseline justify-center gap-1">
+              <span className="inline-block w-[7.5rem] text-right text-[40px] font-extrabold leading-none tabular-nums">
+                {s.weight}
+              </span>
+              <span className="text-[13px] font-bold">{unit}</span>
+            </div>
+            <div className="flex-none text-right">
+              <div className="text-[17px] font-extrabold tabular-nums">{repsLabel}</div>
+              <div className="text-[11px] font-bold opacity-80">{plateText}</div>
+            </div>
+            <span aria-label={checkLabel} className={checkClasses}>
+              ✓
+            </span>
+          </div>
+        </li>
+      );
+    }
+
+    return (
+      <li key={i} className="flex items-center gap-3 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3.5 py-3">
+        <div className="w-16 flex-none">
+          <div className="text-[13px] font-bold">{KIND_LABEL[s.kind]}</div>
+          <div className="text-[12px] font-semibold text-[var(--muted)]">{pct}%</div>
+        </div>
+        <div className="flex flex-1 items-baseline justify-center gap-1">
+          <span className="inline-block w-[5rem] text-right text-[26px] font-extrabold tabular-nums">
+            {s.weight}
+          </span>
+          <span className="text-[12px] font-semibold text-[var(--muted)]">{unit}</span>
+        </div>
+        <div className="flex-none text-right">
+          <div className="text-[15px] font-extrabold tabular-nums">{repsLabel}</div>
+          <div className="text-[11px] font-semibold text-[var(--muted)]">{plateText}</div>
+        </div>
+        <span aria-label={checkLabel} className={checkClasses}>
+          ✓
+        </span>
+      </li>
+    );
+  }
 
   return (
     <section className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4">
@@ -325,6 +392,12 @@ export default function LiftCard({
             </span>
           )}
         </div>
+      )}
+
+      {existingSession != null && existingSession.sets.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-2 list-none p-0 m-0">
+          {existingSession.sets.map((s, i) => renderLoggedRow(s, i))}
+        </ul>
       )}
 
       {existingSession != null && existingSession.notes && (

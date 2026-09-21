@@ -88,7 +88,7 @@ describe('LiftCard', () => {
     expect(session.sets.filter((s) => s.kind === 'main')).toHaveLength(3);
   });
 
-  it('shows a read-only logged state when a session already exists for this lift/week', async () => {
+  it('shows a read-only logged state when a session already exists for this lift/week, with completed sets still visible', async () => {
     const cycle = await seedCycle();
     await sessionRepo.add({
       cycleId: cycle.id as number,
@@ -96,7 +96,12 @@ describe('LiftCard', () => {
       liftKey: 'deadlift',
       date: '2026-01-01',
       status: 'done',
-      sets: [],
+      sets: [
+        { targetReps: 5, weight: 90, actualReps: 5, done: true, isAmrap: false, kind: 'warmup' },
+        { targetReps: 5, weight: 105, actualReps: 5, done: true, isAmrap: false, kind: 'main' },
+        { targetReps: 5, weight: 112, actualReps: 5, done: true, isAmrap: false, kind: 'main' },
+        { targetReps: 5, weight: 119, actualReps: 8, done: true, isAmrap: true, kind: 'main' },
+      ],
       amrapReps: 8,
       estimated1RM: 180,
       rpe: null,
@@ -106,6 +111,20 @@ describe('LiftCard', () => {
     renderCard(cycle);
 
     expect(await screen.findByText(/logged/i)).toBeTruthy();
+
+    // The logged sets stay visible, read-only, not collapsed to a bare summary.
+    expect(screen.getByText('90')).toBeTruthy();
+    expect(screen.getByText('105')).toBeTruthy();
+    expect(screen.getByText('112')).toBeTruthy();
+    expect(screen.getByText('119')).toBeTruthy();
+    expect(screen.getByText('8 reps')).toBeTruthy();
+
+    // Each set shows a done/checkmark indicator.
+    expect(screen.getAllByLabelText(/logged$/i)).toHaveLength(4);
+
+    // No editable controls for a logged lift: no Done buttons, no reps input,
+    // no training-max editor.
+    expect(screen.queryAllByRole('button', { name: /Mark .* done/i })).toHaveLength(0);
     expect(screen.queryByLabelText('Reps done')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Edit training max' })).toBeNull();
   });
@@ -175,7 +194,7 @@ describe('LiftCard', () => {
     expect(screen.queryByRole('button', { name: /supporting lifts/i })).toBeNull();
   });
 
-  it('hides a warm-up row once marked done when hideCompletedWarmups is set, leaving work rows intact', async () => {
+  it('keeps a warm-up row visible once marked done, even with hideCompletedWarmups set (retired setting)', async () => {
     const cycle = await seedCycle();
     renderCard(cycle, { settings: { ...defaultSettings, hideCompletedWarmups: true } });
 
@@ -189,7 +208,11 @@ describe('LiftCard', () => {
 
     fireEvent.click(warmupToggles[0]);
 
-    expect(screen.queryByRole('button', { name: firstLabel })).toBeNull();
+    // hideCompletedWarmups no longer hides anything — the row stays present,
+    // now marked done.
+    const stillThere = screen.getByRole('button', { name: firstLabel });
+    expect(stillThere).toBeTruthy();
+    expect(stillThere.getAttribute('aria-pressed')).toBe('true');
     // Work rows are unaffected.
     expect(screen.getAllByText('×5').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('×5+')).toBeTruthy();

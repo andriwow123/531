@@ -171,6 +171,16 @@ describe('Settings', () => {
     expect(screen.queryByRole('switch', { name: /plate breakdown/i })).toBeNull();
   });
 
+  it('does not render a Hide completed warm-ups toggle (retired — completed sets stay visible)', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(screen.queryByText('Hide completed warm-ups')).toBeNull();
+    expect(screen.queryByRole('switch', { name: /hide completed warm-ups/i })).toBeNull();
+  });
+
   it('shows units and Training Max % read-only with an onboarding note', async () => {
     await seedProfile();
     renderSettings();
