@@ -183,13 +183,47 @@ describe('SupportingLifts', () => {
     });
   });
 
-  it('removes a built-in exercise, hiding it and persisting the hide', async () => {
+  it('shows a confirm step before removing a built-in exercise, without deleting it yet', async () => {
     renderExpanded();
 
     const pushSection = await screen.findByRole('region', { name: 'Push' });
     await within(pushSection).findByText('Dips');
 
-    fireEvent.click(within(pushSection).getByRole('button', { name: /remove dips/i }));
+    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove Dips$/i }));
+
+    expect(within(pushSection).getByText('Dips')).toBeTruthy();
+    expect(within(pushSection).getByRole('button', { name: /cancel/i })).toBeTruthy();
+    expect(within(pushSection).getByRole('button', { name: /confirm remove dips/i })).toBeTruthy();
+
+    const hidden = await hiddenSupportingRepo.all();
+    expect(hidden.some((h) => h.category === 'push' && h.name === 'Dips')).toBe(false);
+  });
+
+  it('cancels the remove confirm, leaving the exercise in place', async () => {
+    renderExpanded();
+
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    await within(pushSection).findByText('Dips');
+
+    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove Dips$/i }));
+    fireEvent.click(within(pushSection).getByRole('button', { name: /cancel/i }));
+
+    expect(within(pushSection).getByText('Dips')).toBeTruthy();
+    expect(within(pushSection).queryByRole('button', { name: /cancel/i })).toBeNull();
+    expect(within(pushSection).getByRole('button', { name: /^Remove Dips$/i })).toBeTruthy();
+
+    const hidden = await hiddenSupportingRepo.all();
+    expect(hidden.some((h) => h.category === 'push' && h.name === 'Dips')).toBe(false);
+  });
+
+  it('removes a built-in exercise after confirming, hiding it and persisting the hide', async () => {
+    renderExpanded();
+
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    await within(pushSection).findByText('Dips');
+
+    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove Dips$/i }));
+    fireEvent.click(within(pushSection).getByRole('button', { name: /confirm remove dips/i }));
 
     await waitFor(() => {
       expect(within(pushSection).queryByText('Dips')).toBeNull();
@@ -198,6 +232,34 @@ describe('SupportingLifts', () => {
     await waitFor(async () => {
       const hidden = await hiddenSupportingRepo.all();
       expect(hidden.some((h) => h.category === 'push' && h.name === 'Dips')).toBe(true);
+    });
+  });
+
+  it('removes a custom exercise after confirming, deleting it via customExerciseRepo', async () => {
+    renderExpanded();
+
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    fireEvent.click(within(pushSection).getByRole('button', { name: /add exercise/i }));
+
+    fireEvent.change(within(pushSection).getByLabelText(/exercise name/i), {
+      target: { value: 'JM Press' },
+    });
+    fireEvent.click(within(pushSection).getByRole('button', { name: /^add$/i }));
+
+    await waitFor(() => {
+      expect(within(pushSection).getByText('JM Press')).toBeTruthy();
+    });
+
+    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove JM Press$/i }));
+    fireEvent.click(within(pushSection).getByRole('button', { name: /confirm remove jm press/i }));
+
+    await waitFor(() => {
+      expect(within(pushSection).queryByText('JM Press')).toBeNull();
+    });
+
+    await waitFor(async () => {
+      const customs = await customExerciseRepo.all();
+      expect(customs.some((c) => c.category === 'push' && c.name === 'JM Press')).toBe(false);
     });
   });
 
