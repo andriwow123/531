@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { db } from '../../data/db';
-import { cycleRepo, profileRepo, settingsRepo } from '../../data/repositories';
+import { cycleRepo, profileRepo, settingsRepo, liftRepo } from '../../data/repositories';
 import type { Cycle } from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
 import { SettingsProvider } from '../settings/SettingsContext';
+import { convertUnits } from '../../data/units';
 import Settings from './Settings';
 
 beforeEach(async () => {
@@ -184,16 +185,86 @@ describe('Settings', () => {
     expect(screen.queryByRole('switch', { name: /hide completed warm-ups/i })).toBeNull();
   });
 
-  it('shows Units read-only in the Profile section', async () => {
+  it('shows a Units segmented control in the Profile section, reflecting the loaded profile', async () => {
     await seedProfile();
     renderSettings();
 
     await screen.findByRole('heading', { name: /settings/i });
 
     // Units only renders once the component's own mount-time
-    // profileRepo.get() resolves (a "—" placeholder shows until then), so
-    // this must be awaited rather than asserted synchronously.
-    expect(await screen.findByText('kg', { selector: 'span' })).toBeInTheDocument();
+    // profileRepo.get() resolves, so this must be awaited rather than
+    // asserted synchronously.
+    const kgButton = await screen.findByRole('button', { name: 'kg' });
+    const lbButton = screen.getByRole('button', { name: 'lb' });
+    expect(kgButton.getAttribute('aria-pressed')).toBe('true');
+    expect(lbButton.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('selecting the other unit shows an inline convert confirm without converting yet', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+    await screen.findByRole('button', { name: 'kg' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'lb' }));
+
+    expect(await screen.findByText('Convert all your weights to lb?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Convert' })).toBeInTheDocument();
+
+    // Not converted yet: profile is untouched until Convert is confirmed.
+    expect((await profileRepo.get())?.units).toBe('kg');
+  });
+
+  it('Cancel on the convert confirm dismisses it and leaves units unchanged', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+    await screen.findByRole('button', { name: 'kg' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'lb' }));
+    await screen.findByText('Convert all your weights to lb?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText('Convert all your weights to lb?')).toBeNull(),
+    );
+    const kgButton = screen.getByRole('button', { name: 'kg' });
+    expect(kgButton.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('selecting the currently-active unit is a no-op (no confirm shown)', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+    await screen.findByRole('button', { name: 'kg' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'kg' }));
+
+    expect(screen.queryByText(/convert all your weights/i)).toBeNull();
+  });
+
+  it('converting units updates the stored profile and lift weights (data-layer check, not via reload)', async () => {
+    await seedProfile();
+    await liftRepo.bulkSave([
+      { key: 'squat', name: 'Squat', category: 'lower', oneRm: 140, trainingMax: 140, increment: 5 },
+    ]);
+
+    // Exercise the same conversion the Convert button triggers, directly at
+    // the data layer — jsdom can't perform the real window.location.reload
+    // that follows a successful conversion in the app.
+    await convertUnits('lb');
+
+    const profile = await profileRepo.get();
+    expect(profile?.units).toBe('lb');
+    expect(profile?.roundingIncrement).toBe(5);
+
+    const lifts = await liftRepo.all();
+    expect(lifts[0].increment).toBe(10);
   });
 
   it('does not render a Training Max % row or the onboarding caption in Profile (vestigial)', async () => {
@@ -201,7 +272,7 @@ describe('Settings', () => {
     renderSettings();
 
     await screen.findByRole('heading', { name: /settings/i });
-    await screen.findByText('kg', { selector: 'span' });
+    await screen.findByRole('button', { name: 'kg' });
 
     expect(screen.queryByText('Training Max %')).toBeNull();
     expect(screen.queryByText(/85%/)).toBeNull();

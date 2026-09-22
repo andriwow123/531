@@ -5,6 +5,7 @@ import type { Unit, TemplateKey, LiftKey } from '../../domain';
 import { orderedLifts, moveItem } from '../../domain';
 import { cycleRepo, profileRepo } from '../../data/repositories';
 import type { Cycle, Profile } from '../../data/repositories';
+import { convertUnits } from '../../data/units';
 import { exportBackup, parseBackup, importBackup } from '../../data/backup';
 import type { BackupFile } from '../../data/backup';
 import { resolveDisplay } from '../../settings/display';
@@ -37,6 +38,11 @@ const TEMPLATE_DESCRIPTIONS: Record<TemplateKey, string> = {
   bbb: 'Adds 5×10 back-off sets at ~50% of your training max.',
   fsl: 'Adds back-off sets at your first work-set weight.',
 };
+
+const UNIT_OPTIONS: { value: Unit; label: string }[] = [
+  { value: 'kg', label: 'kg' },
+  { value: 'lb', label: 'lb' },
+];
 
 const THEMES: { value: 'dark' | 'light' | 'system'; label: string }[] = [
   { value: 'dark', label: 'Dark' },
@@ -229,6 +235,7 @@ export default function Settings() {
   const [pendingRestore, setPendingRestore] = useState<BackupFile | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const restoreInputRef = useRef<HTMLInputElement>(null);
+  const [pendingUnit, setPendingUnit] = useState<Unit | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -275,6 +282,24 @@ export default function Settings() {
     updateSettings({
       displayOverrides: { ...settings.displayOverrides, [el]: !display[el] },
     });
+  }
+
+  function selectUnit(unit: Unit) {
+    if (!profile || unit === profile.units) {
+      setPendingUnit(null);
+      return;
+    }
+    setPendingUnit(unit);
+  }
+
+  function cancelUnitConvert() {
+    setPendingUnit(null);
+  }
+
+  async function confirmUnitConvert() {
+    if (!pendingUnit) return;
+    await convertUnits(pendingUnit);
+    window.location.reload();
   }
 
   async function changeRounding(dir: 1 | -1) {
@@ -564,12 +589,43 @@ export default function Settings() {
           </Section>
 
           <Section title="Profile">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold">Units</span>
-              <span className="text-sm font-bold text-[var(--muted)]">
-                {profile ? profile.units : '—'}
-              </span>
-            </div>
+            {profile ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">Units</span>
+                  <Segmented
+                    value={pendingUnit ?? profile.units}
+                    options={UNIT_OPTIONS}
+                    onChange={selectUnit}
+                  />
+                </div>
+                {pendingUnit && (
+                  <div className="flex flex-col gap-2 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
+                    <p className="text-sm font-semibold">
+                      Convert all your weights to {pendingUnit}?
+                    </p>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelUnitConvert}
+                        className="min-h-9 rounded-[var(--r-pill)] px-3 py-2 text-sm font-bold text-[var(--muted)] hover:text-[var(--text)]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={confirmUnitConvert}
+                        className="min-h-9 rounded-[var(--r-pill)] bg-[var(--accent)] px-3 py-2 text-sm font-extrabold text-[var(--on-accent)]"
+                      >
+                        Convert
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-[var(--muted)]">Loading…</p>
+            )}
           </Section>
 
           <Section title="Backup">
