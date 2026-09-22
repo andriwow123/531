@@ -394,3 +394,58 @@ describe('Settings — notify permission', () => {
     await waitFor(async () => expect((await settingsRepo.get()).restTimer.notify).toBe(false));
   });
 });
+
+describe('Settings — Backup', () => {
+  it('renders a Backup section with Export and Restore controls', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(await screen.findByText('Backup')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export backup' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore from backup' })).toBeInTheDocument();
+  });
+
+  it('shows the restore confirm step after picking a valid backup file, and Cancel dismisses it', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    const validBackup = JSON.stringify({
+      app: '531',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      data: { profile: [] },
+    });
+    const file = new File([validBackup], 'backup.json', { type: 'application/json' });
+    const input = screen.getByTestId('restore-file-input') as HTMLInputElement;
+
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(await screen.findByText(/restore replaces all data on this device/i)).toBeInTheDocument();
+    expect(input.value).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/restore replaces all data on this device/i)).toBeNull(),
+    );
+  });
+
+  it('shows an inline error when the picked file is not a valid backup', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    const badFile = new File(['not json'], 'backup.json', { type: 'application/json' });
+    const input = screen.getByTestId('restore-file-input') as HTMLInputElement;
+
+    fireEvent.change(input, { target: { files: [badFile] } });
+
+    expect(await screen.findByText(/couldn't read that backup file/i)).toBeInTheDocument();
+    expect(screen.queryByText(/restore replaces all data on this device/i)).toBeNull();
+  });
+});
