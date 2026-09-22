@@ -354,4 +354,22 @@ describe('SupportingLifts', () => {
     expect(within(pushSection).getByText('Dips')).toBeTruthy();
     expect(within(pushSection).getByRole('button', { name: /^Add Dips$/i })).toBeTruthy();
   });
+
+  it('a legacy row with no `done` field reads as done (backward-compatible default)', async () => {
+    // Bypass supportingDoneRepo's typed methods to simulate a pre-migration
+    // row that predates the `done` flag entirely.
+    await db.supportingDone.add({
+      date: today,
+      liftKey: 'press',
+      category: 'push',
+      name: 'Dips',
+      weight: 20,
+      reps: 10,
+    } as any);
+
+    renderExpanded();
+
+    const checkbox = (await screen.findByRole('checkbox', { name: /mark dips done/i })) as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+  });
 });

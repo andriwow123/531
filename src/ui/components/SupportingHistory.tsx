@@ -34,8 +34,8 @@ export default function SupportingHistory() {
             >
               <h3 className="text-sm font-extrabold">{g.name}</h3>
               <ul className="mt-1.5 flex flex-col gap-1 list-none p-0 m-0">
-                {g.entries.map((e) => (
-                  <li key={e.date} className="flex items-center justify-between text-[13px] tabular-nums">
+                {g.entries.map((e, i) => (
+                  <li key={`${e.date}-${i}`} className="flex items-center justify-between text-[13px] tabular-nums">
                     <span className="text-[var(--muted)]">{e.date}</span>
                     <span className="font-bold">
                       {e.weight ?? '—'}
