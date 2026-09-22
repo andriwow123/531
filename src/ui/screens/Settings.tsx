@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Unit, TemplateKey, LiftKey } from '../../domain';
 import { orderedLifts, moveItem } from '../../domain';
 import { cycleRepo, profileRepo } from '../../data/repositories';
 import type { Cycle, Profile } from '../../data/repositories';
+import { exportBackup, parseBackup, importBackup } from '../../data/backup';
+import type { BackupFile } from '../../data/backup';
 import { resolveDisplay } from '../../settings/display';
 import type { DisplayPreset, DisplayElement } from '../../settings/schema';
 import { useSettings } from '../settings/SettingsContext';
@@ -218,6 +220,9 @@ export default function Settings() {
     squat: '',
     deadlift: '',
   });
+  const [pendingRestore, setPendingRestore] = useState<BackupFile | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const restoreInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -303,6 +308,74 @@ export default function Settings() {
       Math.max(REST_SECONDS_MIN, settings.restTimer.defaultSeconds + dir * REST_SECONDS_STEP),
     );
     updateSettings({ restTimer: { ...settings.restTimer, defaultSeconds: next } });
+  }
+
+  // Export the whole local DB as a downloadable/shareable JSON file. Prefers
+  // the Web Share sheet (so iOS can save to Files) when the platform
+  // supports sharing files; falls back to an object-URL download link
+  // otherwise. Best-effort: any failure (including the user cancelling the
+  // share sheet) is silently swallowed rather than surfaced as an error.
+  async function handleExportBackup() {
+    try {
+      const backup = await exportBackup();
+      const json = JSON.stringify(backup);
+      const filename = `531-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const file = new File([json], filename, { type: 'application/json' });
+
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.canShare &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({ files: [file], title: '5/3/1 backup' });
+        return;
+      }
+
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // best-effort; ignore (this also covers a user-cancelled share sheet)
+    }
+  }
+
+  function handleRestoreClick() {
+    restoreInputRef.current?.click();
+  }
+
+  async function handleRestoreFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const input = e.currentTarget;
+    const selected = input.files?.[0];
+    if (!selected) return;
+    try {
+      const text = await selected.text();
+      const parsed = parseBackup(text);
+      setRestoreError(null);
+      setPendingRestore(parsed);
+    } catch {
+      setRestoreError("Couldn't read that backup file.");
+      setPendingRestore(null);
+    } finally {
+      input.value = '';
+    }
+  }
+
+  function cancelRestore() {
+    setPendingRestore(null);
+  }
+
+  async function confirmRestore() {
+    if (!pendingRestore) return;
+    try {
+      await importBackup(pendingRestore);
+      window.location.reload();
+    } catch {
+      setRestoreError("Couldn't read that backup file.");
+      setPendingRestore(null);
+    }
   }
 
   const roundingSteps = profile ? ROUNDING_STEPS[profile.units] : null;
@@ -496,6 +569,65 @@ export default function Settings() {
             <p className="text-[12px] text-[var(--muted)]">
               Units and Training Max % are set during onboarding. Editing them here is coming soon.
             </p>
+          </Section>
+
+          <Section title="Backup">
+            <p className="text-sm text-[var(--muted)]">
+              Your data is stored on this device. Export a backup you can keep safe, and restore
+              it on a new device or after clearing data.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleExportBackup}
+                className="min-h-9 w-full rounded-[var(--r-pill)] bg-[var(--accent)] py-2.5 text-sm font-bold text-[var(--on-accent)]"
+              >
+                Export backup
+              </button>
+              <button
+                type="button"
+                onClick={handleRestoreClick}
+                className="min-h-9 w-full rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] py-2.5 text-sm font-bold text-[var(--text)]"
+              >
+                Restore from backup
+              </button>
+              <input
+                ref={restoreInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={handleRestoreFileChange}
+                data-testid="restore-file-input"
+                className="hidden"
+              />
+            </div>
+
+            {restoreError && (
+              <p className="text-[12px] font-semibold text-[var(--accent)]">{restoreError}</p>
+            )}
+
+            {pendingRestore && (
+              <div className="flex flex-col gap-2 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
+                <p className="text-sm font-semibold">
+                  Restore replaces all data on this device. Restore?
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelRestore}
+                    className="min-h-9 rounded-[var(--r-pill)] px-3 py-2 text-sm font-bold text-[var(--muted)] hover:text-[var(--text)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmRestore}
+                    className="min-h-9 rounded-[var(--r-pill)] bg-[var(--accent)] px-3 py-2 text-sm font-extrabold text-[var(--on-accent)]"
+                  >
+                    Restore
+                  </button>
+                </div>
+              </div>
+            )}
           </Section>
         </div>
       </div>
