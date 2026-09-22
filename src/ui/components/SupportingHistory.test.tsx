@@ -12,7 +12,11 @@ beforeEach(async () => {
 describe('SupportingHistory', () => {
   it('renders each logged supporting exercise with its recent weight×reps', async () => {
     await supportingDoneRepo.select('2026-03-03', 'press', 'push', 'Dips', { weight: 30, reps: 8 });
+    await supportingDoneRepo.setDone('2026-03-03', 'press', 'push', 'Dips', true);
     await supportingDoneRepo.select('2026-03-01', 'press', 'push', 'Dips', { weight: 25, reps: 10 });
+    await supportingDoneRepo.setDone('2026-03-01', 'press', 'push', 'Dips', true);
+    // Picked but not yet checked done — must not appear in history.
+    await supportingDoneRepo.select('2026-03-02', 'press', 'push', 'Undone Thing', { weight: 40, reps: 5 });
 
     render(<SupportingHistory />);
 
@@ -28,6 +32,8 @@ describe('SupportingHistory', () => {
     expect(entryRows[1].textContent).toMatch(/2026-03-01/);
     expect(entryRows[1].textContent).toMatch(/25/);
     expect(entryRows[1].textContent).toMatch(/10/);
+
+    expect(screen.queryByText('Undone Thing')).toBeNull();
   });
 
   it('shows an empty state when nothing is logged', async () => {

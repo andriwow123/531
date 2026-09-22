@@ -141,6 +141,8 @@ export const supportingDoneRepo = {
     rows.sort((a, b) => b.date.localeCompare(a.date));
     return { weight: rows[0].weight, reps: rows[0].reps };
   },
+  // Logged AND completed (done). Legacy rows predate the `done` field; a
+  // missing `done` is coerced to done since those rows represent completed work.
   allLogged: (): Promise<SupportingDone[]> =>
-    db.supportingDone.filter((d) => d.weight !== null || d.reps !== null).toArray(),
+    db.supportingDone.filter((d) => (d.weight !== null || d.reps !== null) && (d.done ?? true)).toArray(),
 };

@@ -234,10 +234,19 @@ describe('supportingDoneRepo select/setDone/deselect/lastLogged', () => {
     expect(await supportingDoneRepo.lastLogged('push', 'Nope', '2026-03-03')).toBeNull();
   });
 
-  it('allLogged returns only rows with a non-null weight or reps', async () => {
-    await supportingDoneRepo.select('2026-03-02', 'press', 'push', 'A', { weight: null, reps: null });
+  it('allLogged returns only completed (done) rows with a non-null weight or reps, coercing legacy rows (no done field) to done', async () => {
+    // picked-but-unchecked: has data, but done:false — excluded
+    await supportingDoneRepo.select('2026-03-02', 'press', 'push', 'A', { weight: 20, reps: null });
+    // done: true with data — included
     await supportingDoneRepo.select('2026-03-02', 'press', 'push', 'B', { weight: 20, reps: null });
+    await supportingDoneRepo.setDone('2026-03-02', 'press', 'push', 'B', true);
+    // legacy row predating the `done` field, with data — coerced to done, included
+    await db.supportingDone.add({ date: '2026-03-02', liftKey: 'press', category: 'push', name: 'C', weight: 20, reps: null } as any);
+    // no data at all, done: true — excluded (weight/reps still null)
+    await supportingDoneRepo.select('2026-03-02', 'press', 'push', 'D', { weight: null, reps: null });
+    await supportingDoneRepo.setDone('2026-03-02', 'press', 'push', 'D', true);
+
     const logged = await supportingDoneRepo.allLogged();
-    expect(logged.map((r) => r.name)).toEqual(['B']);
+    expect(logged.map((r) => r.name).sort()).toEqual(['B', 'C']);
   });
 });

@@ -187,6 +187,7 @@ describe('History — supporting-lift history (no completed main sessions)', () 
     // No sessions at all (and specifically none with status 'done'), so
     // hasDoneSessions is false and the early-return branch renders.
     await supportingDoneRepo.select('2026-03-03', 'press', 'push', 'Dips', { weight: 30, reps: 8 });
+    await supportingDoneRepo.setDone('2026-03-03', 'press', 'push', 'Dips', true);
 
     renderHistory();
 
