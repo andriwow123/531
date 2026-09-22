@@ -240,3 +240,40 @@ describe('supportingDoneRepo', () => {
     expect(forDay[0]).toMatchObject({ weight: 20, reps: 10 });
   });
 });
+describe('supportingDoneRepo select/setDone/deselect/lastLogged', () => {
+  it('select adds a today row (done:false) and is idempotent, seeding weight/reps', async () => {
+    await supportingDoneRepo.select('2026-03-02', 'press', 'push', 'Dips', { weight: 30, reps: 12 });
+    await supportingDoneRepo.select('2026-03-02', 'press', 'push', 'Dips', { weight: 99, reps: 1 }); // no-op
+    const rows = await supportingDoneRepo.forDate('2026-03-02');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: 'Dips', done: false, weight: 30, reps: 12 });
+  });
+
+  it('setDone flips the done flag without removing the row; deselect removes it', async () => {
+    await supportingDoneRepo.select('2026-03-02', 'press', 'push', 'Dips', { weight: null, reps: null });
+    await supportingDoneRepo.setDone('2026-03-02', 'press', 'push', 'Dips', true);
+    let rows = await supportingDoneRepo.forDate('2026-03-02');
+    expect(rows[0].done).toBe(true);
+    await supportingDoneRepo.deselect('2026-03-02', 'press', 'push', 'Dips');
+    rows = await supportingDoneRepo.forDate('2026-03-02');
+    expect(rows).toHaveLength(0);
+  });
+
+  it('lastLogged returns the most recent prior non-null entry by category+name, else null', async () => {
+    await supportingDoneRepo.select('2026-03-01', 'press', 'push', 'Dips', { weight: 25, reps: 10 });
+    await supportingDoneRepo.select('2026-03-02', 'bench', 'push', 'Dips', { weight: 27.5, reps: 8 });
+    const found = await supportingDoneRepo.lastLogged('push', 'Dips', '2026-03-03');
+    expect(found).toEqual({ weight: 27.5, reps: 8 });
+    // strictly before the given date:
+    const earlier = await supportingDoneRepo.lastLogged('push', 'Dips', '2026-03-02');
+    expect(earlier).toEqual({ weight: 25, reps: 10 });
+    expect(await supportingDoneRepo.lastLogged('push', 'Nope', '2026-03-03')).toBeNull();
+  });
+
+  it('allLogged returns only rows with a non-null weight or reps', async () => {
+    await supportingDoneRepo.select('2026-03-02', 'press', 'push', 'A', { weight: null, reps: null });
+    await supportingDoneRepo.select('2026-03-02', 'press', 'push', 'B', { weight: 20, reps: null });
+    const logged = await supportingDoneRepo.allLogged();
+    expect(logged.map((r) => r.name)).toEqual(['B']);
+  });
+});
