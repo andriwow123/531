@@ -1,7 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from './db';
 import { convertUnits } from './units';
-import { profileRepo, liftRepo, cycleRepo, sessionRepo, bodyweightRepo } from './repositories';
+import {
+  profileRepo,
+  liftRepo,
+  cycleRepo,
+  sessionRepo,
+  bodyweightRepo,
+  assistanceRepo,
+  supportingDoneRepo,
+} from './repositories';
 import type { Cycle, Session } from './repositories';
 import { roundToIncrement } from '../domain';
 
@@ -121,5 +129,35 @@ describe('convertUnits', () => {
 
   it('does not throw when there is no profile', async () => {
     await expect(convertUnits('lb')).resolves.toBeUndefined();
+  });
+});
+
+describe('convertUnits — assistance & supporting-lift weights', () => {
+  it('converts non-null assistance/supportingDone weights and leaves null weights null', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+
+    await assistanceRepo.add({ date: '2026-02-01', category: 'push', name: 'Dips', sets: 3, reps: 10, weight: 60 });
+    await assistanceRepo.add({ date: '2026-02-01', category: 'pull', name: 'Chin-ups', sets: 3, reps: 8, weight: null });
+
+    await supportingDoneRepo.log('2026-02-01', 'press', 'pull', 'Chin-ups', { weight: 20, reps: 12 });
+    await supportingDoneRepo.toggle('2026-02-01', 'bench', 'push', 'Dips'); // weight/reps left null
+
+    await convertUnits('lb');
+
+    const assistance = await assistanceRepo.all();
+    const dips = assistance.find((a) => a.name === 'Dips');
+    const chinups = assistance.find((a) => a.name === 'Chin-ups');
+    expect(dips?.weight).toBe(roundToIncrement(60 * KG_TO_LB, 5));
+    // reps/sets/category/name/date unchanged
+    expect(dips).toMatchObject({ date: '2026-02-01', category: 'push', name: 'Dips', sets: 3, reps: 10 });
+    expect(chinups?.weight).toBeNull();
+
+    const supportingDone = await supportingDoneRepo.forDate('2026-02-01');
+    const loggedChinups = supportingDone.find((s) => s.liftKey === 'press' && s.name === 'Chin-ups');
+    const toggledDips = supportingDone.find((s) => s.liftKey === 'bench' && s.name === 'Dips');
+    expect(loggedChinups?.weight).toBe(roundToIncrement(20 * KG_TO_LB, 5));
+    expect(loggedChinups).toMatchObject({ reps: 12, category: 'pull', name: 'Chin-ups' });
+    expect(toggledDips?.weight).toBeNull();
+    expect(toggledDips?.reps).toBeNull();
   });
 });
