@@ -72,6 +72,12 @@ describe('parseBackup', () => {
     ).toThrow();
   });
 
+  it('throws when data is an array rather than an object', () => {
+    expect(() =>
+      parseBackup(JSON.stringify({ app: '531', version: 1, data: [] })),
+    ).toThrow();
+  });
+
   it('parses a valid backup', () => {
     const valid = JSON.stringify({ app: '531', version: 1, exportedAt: 'x', data: { profile: [] } });
     const parsed = parseBackup(valid);

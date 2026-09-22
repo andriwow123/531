@@ -43,7 +43,7 @@ export function parseBackup(text: string): BackupFile {
   if (candidate.version !== 1) {
     throw new Error('That backup is from an unsupported version.');
   }
-  if (typeof candidate.data !== 'object' || candidate.data === null) {
+  if (typeof candidate.data !== 'object' || candidate.data === null || Array.isArray(candidate.data)) {
     throw new Error('That file is not a valid 5/3/1 backup.');
   }
 
