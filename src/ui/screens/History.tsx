@@ -12,6 +12,7 @@ import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/reposi
 import type { Cycle, Lift, Session } from '../../data/repositories';
 import ProgressChart from '../components/ProgressChart';
 import BodyweightCard from '../components/BodyweightCard';
+import SupportingHistory from '../components/SupportingHistory';
 import { useSettings } from '../settings/SettingsContext';
 import { NavIconLink, HistoryIcon, SettingsIcon, HomeIcon } from '../components/NavIcons';
 
@@ -162,6 +163,8 @@ export default function History() {
             );
           })}
         </ul>
+
+        {settings.assistanceTracking && <SupportingHistory />}
 
         <section className="mt-5">
           <h2 className="mb-2 text-sm font-extrabold text-[var(--muted)]">Cycle log</h2>
