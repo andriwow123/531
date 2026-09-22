@@ -114,6 +114,12 @@ export default function History() {
             </div>
           )}
 
+          {settings.assistanceTracking && (
+            <div className="mb-4">
+              <SupportingHistory />
+            </div>
+          )}
+
           <p className="text-sm text-[var(--muted)]">
             Log a few workouts and your progress shows up here.
           </p>

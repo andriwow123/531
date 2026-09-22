@@ -2,7 +2,14 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { db } from '../../data/db';
-import { profileRepo, liftRepo, cycleRepo, sessionRepo, settingsRepo } from '../../data/repositories';
+import {
+  profileRepo,
+  liftRepo,
+  cycleRepo,
+  sessionRepo,
+  settingsRepo,
+  supportingDoneRepo,
+} from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
 import { SettingsProvider } from '../settings/SettingsContext';
 import History from './History';
@@ -169,5 +176,23 @@ describe('History — bodyweight card', () => {
     await waitFor(() => {
       expect(screen.queryByText('Bodyweight')).toBeNull();
     });
+  });
+});
+
+describe('History — supporting-lift history (no completed main sessions)', () => {
+  it('shows logged supporting-lift history in the empty-state (no-done-sessions) branch', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    await settingsRepo.save({ ...defaultSettings, assistanceTracking: true });
+
+    // No sessions at all (and specifically none with status 'done'), so
+    // hasDoneSessions is false and the early-return branch renders.
+    await supportingDoneRepo.select('2026-03-03', 'press', 'push', 'Dips', { weight: 30, reps: 8 });
+
+    renderHistory();
+
+    expect(await screen.findByText(/log a few workouts and your progress shows up here/i)).toBeTruthy();
+    // SupportingHistory loads its rows asynchronously (own effect + repo
+    // call), so wait for it rather than asserting synchronously.
+    expect(await screen.findByText('Dips')).toBeTruthy();
   });
 });
