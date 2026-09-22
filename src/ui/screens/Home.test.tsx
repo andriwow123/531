@@ -461,7 +461,7 @@ describe('Home — rest timer', () => {
     });
   });
 
-  it('does not render the rest-timer widget when the display preset hides it', async () => {
+  it('renders the rest-timer widget when enabled, regardless of the display preset', async () => {
     await seed();
     await settingsRepo.save({
       ...defaultSettings,
@@ -472,8 +472,6 @@ describe('Home — rest timer', () => {
     renderHome();
 
     await waitForLoaded();
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
-    });
+    expect(await screen.findByRole('button', { name: 'Start' })).toBeTruthy();
   });
 });

@@ -5,7 +5,6 @@ import { nextUp, LIFT_ORDER, orderedLifts, moveItem } from '../../domain';
 import type { LiftKey, Unit, WeekNumber } from '../../domain';
 import { cycleRepo, profileRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, Session } from '../../data/repositories';
-import { resolveDisplay } from '../../settings/display';
 import { useSettings } from '../settings/SettingsContext';
 import { useRestTimer } from '../hooks/useRestTimer';
 import LiftCard from '../components/LiftCard';
@@ -51,7 +50,6 @@ function isCycleComplete(sessions: Session[]): boolean {
  */
 export default function Home() {
   const { settings, updateSettings, loaded: settingsLoaded } = useSettings();
-  const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
   const navigate = useNavigate();
   const restTimer = useRestTimer(settings.restTimer.defaultSeconds);
 
@@ -310,7 +308,7 @@ export default function Home() {
           ))}
         </div>
 
-        {display.restTimer && settings.restTimer.enabled && (
+        {settings.restTimer.enabled && (
           <div className="mt-4 rounded-[var(--r-card)] bg-[var(--surface-2)] p-3 text-center">
             <div className="text-sm font-bold">
               Rest timer ·{' '}

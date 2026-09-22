@@ -32,6 +32,12 @@ const TEMPLATES: { value: TemplateKey; label: string }[] = [
   { value: 'fsl', label: 'FSL' },
 ];
 
+const TEMPLATE_DESCRIPTIONS: Record<TemplateKey, string> = {
+  base: 'Main 5/3/1 sets only.',
+  bbb: 'Adds 5×10 back-off sets at ~50% of your training max.',
+  fsl: 'Adds back-off sets at your first work-set weight.',
+};
+
 const THEMES: { value: 'dark' | 'light' | 'system'; label: string }[] = [
   { value: 'dark', label: 'Dark' },
   { value: 'light', label: 'Light' },
@@ -414,11 +420,6 @@ export default function Settings() {
               options={DISPLAY_PRESETS}
               onChange={(v) => updateSettings({ displayPreset: v })}
             />
-            <ToggleRow
-              label="Rest timer widget"
-              checked={display.restTimer}
-              onChange={() => toggleDisplay('restTimer')}
-            />
             <ToggleRow label="Notes" checked={display.notes} onChange={() => toggleDisplay('notes')} />
             <ToggleRow
               label="Warm-ups"
@@ -448,6 +449,9 @@ export default function Settings() {
               options={TEMPLATES}
               onChange={(v) => updateSettings({ template: { ...settings.template, selected: v } })}
             />
+            <p className="text-[12px] text-[var(--muted)]">
+              {TEMPLATE_DESCRIPTIONS[settings.template.selected]}
+            </p>
             <ToggleRow
               label="5s PRO (no AMRAP in week 3)"
               checked={settings.template.fivesPro}
@@ -455,6 +459,9 @@ export default function Settings() {
                 updateSettings({ template: { ...settings.template, fivesPro: !settings.template.fivesPro } })
               }
             />
+            <p className="text-[12px] text-[var(--muted)]">
+              Every main set is 5 reps (no AMRAP) — steadier progress.
+            </p>
             <ToggleRow
               label="Warm-up sets"
               checked={settings.template.warmups}
@@ -462,6 +469,9 @@ export default function Settings() {
                 updateSettings({ template: { ...settings.template, warmups: !settings.template.warmups } })
               }
             />
+            <p className="text-[12px] text-[var(--muted)]">
+              Adds 40/50/60% warm-up sets before your work sets.
+            </p>
           </Section>
 
           <Section title="Rest timer">
@@ -560,15 +570,6 @@ export default function Settings() {
                 {profile ? profile.units : '—'}
               </span>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold">Training Max %</span>
-              <span className="text-sm font-bold text-[var(--muted)]">
-                {profile ? `${Math.round(profile.tmPercent * 100)}%` : '—'}
-              </span>
-            </div>
-            <p className="text-[12px] text-[var(--muted)]">
-              Units and Training Max % are set during onboarding. Editing them here is coming soon.
-            </p>
           </Section>
 
           <Section title="Backup">

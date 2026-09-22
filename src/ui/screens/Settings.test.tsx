@@ -184,18 +184,75 @@ describe('Settings', () => {
     expect(screen.queryByRole('switch', { name: /hide completed warm-ups/i })).toBeNull();
   });
 
-  it('shows units and Training Max % read-only with an onboarding note', async () => {
+  it('shows Units read-only in the Profile section', async () => {
     await seedProfile();
     renderSettings();
 
     await screen.findByRole('heading', { name: /settings/i });
 
-    // Units/TM% only render once the component's own mount-time
+    // Units only renders once the component's own mount-time
     // profileRepo.get() resolves (a "—" placeholder shows until then), so
-    // these must be awaited rather than asserted synchronously.
+    // this must be awaited rather than asserted synchronously.
     expect(await screen.findByText('kg', { selector: 'span' })).toBeInTheDocument();
-    expect(await screen.findByText('85%')).toBeInTheDocument();
-    expect(screen.getByText(/onboarding/i)).toBeInTheDocument();
+  });
+
+  it('does not render a Training Max % row or the onboarding caption in Profile (vestigial)', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+    await screen.findByText('kg', { selector: 'span' });
+
+    expect(screen.queryByText('Training Max %')).toBeNull();
+    expect(screen.queryByText(/85%/)).toBeNull();
+    expect(screen.queryByText(/onboarding/i)).toBeNull();
+  });
+
+  it('does not render a Rest timer widget toggle in Display mode (single rest-timer control)', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(screen.queryByText('Rest timer widget')).toBeNull();
+    expect(screen.queryByRole('switch', { name: /rest timer widget/i })).toBeNull();
+  });
+
+  it('shows the Base template description by default and updates it when switching templates', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(screen.getByText('Main 5/3/1 sets only.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'BBB' }));
+    expect(
+      await screen.findByText('Adds 5×10 back-off sets at ~50% of your training max.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Main 5/3/1 sets only.')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'FSL' }));
+    expect(
+      await screen.findByText('Adds back-off sets at your first work-set weight.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Adds 5×10 back-off sets at ~50% of your training max.'),
+    ).toBeNull();
+  });
+
+  it('shows captions describing the 5s PRO and Warm-up sets toggles', async () => {
+    await seedProfile();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(
+      screen.getByText('Every main set is 5 reps (no AMRAP) — steadier progress.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Adds 40/50/60% warm-up sets before your work sets.'),
+    ).toBeInTheDocument();
   });
 
   it('shows a Training maxes section with the active cycle\'s current TM for each lift', async () => {
