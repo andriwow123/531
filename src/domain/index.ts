@@ -20,3 +20,5 @@ export { bodyweightSeries, latestWeight, bodyweightAxis } from './bodyweight';
 export { ASSISTANCE_CATALOG, exerciseOptions } from './assistanceCatalog';
 export { SUPPORTING_CATALOG, categoriesForLift, bbbFor, supportingList } from './supportingCatalog';
 export type { SupportingItem } from './supportingCatalog';
+export { aggregateSupportingHistory } from './supportingHistory';
+export type { SupportingExerciseHistory } from './supportingHistory';
