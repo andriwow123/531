@@ -22,7 +22,9 @@ describe('SupportingLifts', () => {
 
     expect(screen.queryByText('Dips')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /supporting lifts/i }));
+    const trigger = screen.getByRole('button', { name: /supporting lifts/i });
+    expect(trigger.className).toMatch(/\bw-full\b/);
+    fireEvent.click(trigger);
 
     const pushSection = await screen.findByRole('region', { name: 'Push' });
     expect(within(pushSection).getByText('Dips')).toBeTruthy();

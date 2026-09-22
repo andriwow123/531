@@ -4,6 +4,7 @@ import { categoriesForLift, bbbFor, supportingList } from '../../domain';
 import type { LiftKey, Unit, SupportingItem } from '../../domain';
 import { customExerciseRepo, hiddenSupportingRepo, supportingDoneRepo } from '../../data/repositories';
 import type { AssistanceCategory, CustomExercise, HiddenSupporting, SupportingDone } from '../../data/repositories';
+import Chevron from './Chevron';
 
 export interface SupportingLiftsProps {
   liftKey: LiftKey;
@@ -210,18 +211,19 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
     'rounded-lg border border-[var(--line)] bg-[var(--surface)] px-1.5 py-1 text-center text-sm font-bold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] appearance-none [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none';
 
   return (
-    <div className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4">
+    <div className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)]">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
-        className="text-sm font-semibold text-[var(--accent)]"
+        className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm font-semibold text-[var(--accent)]"
       >
-        {open ? 'Hide supporting lifts' : 'Supporting lifts'}
+        <span>{open ? 'Hide supporting lifts' : 'Supporting lifts'}</span>
+        <Chevron open={open} />
       </button>
 
       {open && (
-        <div className="mt-3 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 px-4 pb-4">
           <div className="flex items-center gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-[13px]">
             <input
               type="checkbox"

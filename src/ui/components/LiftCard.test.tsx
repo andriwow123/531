@@ -306,7 +306,9 @@ describe('LiftCard', () => {
 
     await screen.findByRole('heading', { name: 'Deadlift' });
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Add note' }));
+    const noteTrigger = screen.getByRole('button', { name: '+ Add note' });
+    expect(noteTrigger.className).toMatch(/\bw-full\b/);
+    fireEvent.click(noteTrigger);
     const textarea = screen.getByLabelText('Notes') as HTMLTextAreaElement;
     expect(textarea.id).toBe('lift-note-deadlift');
     fireEvent.change(textarea, { target: { value: 'felt strong' } });

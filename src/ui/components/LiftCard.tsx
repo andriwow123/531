@@ -7,6 +7,7 @@ import type { SettingsState } from '../../settings/schema';
 import { resolveDisplay } from '../../settings/display';
 import ExerciseDemo from './ExerciseDemo';
 import SupportingLifts from './SupportingLifts';
+import Chevron from './Chevron';
 
 export interface LiftCardProps {
   liftKey: LiftKey;
@@ -550,7 +551,12 @@ export default function LiftCard({
       )}
 
       {display.notes && existingSession === null && (
-        <div className="mt-3 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4">
+        <div
+          className={
+            'mt-3 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] ' +
+            (noteOpen ? 'p-4' : '')
+          }
+        >
           {noteOpen ? (
             <>
               <label htmlFor={`lift-note-${liftKey}`} className="mb-2 block text-sm font-semibold">
@@ -569,9 +575,11 @@ export default function LiftCard({
             <button
               type="button"
               onClick={() => setNoteOpen(true)}
-              className="text-sm font-semibold text-[var(--accent)]"
+              aria-expanded={false}
+              className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm font-semibold text-[var(--accent)]"
             >
-              {notes.trim() ? notes : '+ Add note'}
+              <span>{notes.trim() ? notes : '+ Add note'}</span>
+              <Chevron open={false} />
             </button>
           )}
         </div>

@@ -11,7 +11,9 @@ describe('ExerciseDemo', () => {
     // Collapsed: instructions aren't in the DOM yet.
     expect(screen.queryByText(demo.instructions[0])).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /how to perform/i }));
+    const trigger = screen.getByRole('button', { name: /how to perform/i });
+    expect(trigger.className).toMatch(/\bw-full\b/);
+    fireEvent.click(trigger);
 
     expect(screen.getByText(demo.name)).toBeTruthy();
     expect(screen.getByAltText(/start/i)).toBeTruthy();
