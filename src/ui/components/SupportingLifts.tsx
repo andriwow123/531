@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { categoriesForLift, bbbFor, supportingList } from '../../domain';
+import { categoriesForLift, bbbFor, supportingList, SUPPORTING_CATALOG } from '../../domain';
 import type { LiftKey, Unit, SupportingItem } from '../../domain';
 import { customExerciseRepo, hiddenSupportingRepo, supportingDoneRepo } from '../../data/repositories';
 import type { AssistanceCategory, CustomExercise, HiddenSupporting, SupportingDone } from '../../data/repositories';
@@ -34,6 +34,13 @@ function logKey(category: AssistanceCategory, name: string): string {
   return `${category}|${name}`;
 }
 
+function draftFromRow(row: { weight: number | null; reps: number | null }): LogDraft {
+  return {
+    weight: row.weight === null || row.weight === undefined ? '' : String(row.weight),
+    reps: row.reps === null || row.reps === undefined ? '' : String(row.reps),
+  };
+}
+
 /** Small trash glyph for the remove control — purely decorative (`aria-hidden`); the button it sits in carries the accessible name. */
 function RemoveIcon() {
   return (
@@ -58,11 +65,16 @@ function RemoveIcon() {
 }
 
 /**
- * Collapsed-by-default "Supporting lifts" checklist for a lift's cycle-overview
- * card: a Boring But Big row (same lift, 5x10 @ 50% TM) plus, per category
- * (Push/Pull/Core for upper lifts, Legs/Pull/Core for lower), the catalog +
- * custom exercises with done checkboxes, weight×reps logging, remove
- * (hide/delete), and an "+ Add exercise" control to add a custom one.
+ * Collapsed-by-default "Supporting lifts" panel for a lift's cycle-overview
+ * card, split into two zones once expanded:
+ *
+ *  - "Today's supporting work" — Boring But Big (always pinned first, same
+ *    lift, 5x10 @ 50% TM) plus whichever exercises have been picked for
+ *    today, each with a done checkmark, weight×reps logging, and a
+ *    remove-from-today control.
+ *  - "Add exercises" — the catalog + custom exercises, grouped by category
+ *    (Push/Pull/Core for upper lifts, Legs/Pull/Core for lower), minus
+ *    whatever's already in today's list. Picking one moves it into Today.
  */
 export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }: SupportingLiftsProps) {
   const [open, setOpen] = useState(false);
@@ -84,8 +96,9 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
 
   // Refreshes catalog/hidden/done-state only. Deliberately does NOT touch
   // `logs` — after the initial seed, the local input state is the source of
-  // truth, so a reload triggered by a commit or a toggle on one row never
-  // clobbers in-flight typing in another (unblurred) field.
+  // truth, so a reload triggered by a commit or a checkmark on one row never
+  // clobbers in-flight typing in another (unblurred) field. Newly-selected
+  // rows are seeded explicitly by the callers that create them.
   async function refresh(): Promise<SupportingDone[]> {
     const [customsList, hiddenList, doneList] = await Promise.all([
       customExerciseRepo.all(),
@@ -108,10 +121,7 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
     const baseline: Record<string, Baseline> = {};
     for (const d of mine) {
       const k = logKey(d.category, d.name);
-      fromDb[k] = {
-        weight: d.weight === null || d.weight === undefined ? '' : String(d.weight),
-        reps: d.reps === null || d.reps === undefined ? '' : String(d.reps),
-      };
+      fromDb[k] = draftFromRow(d);
       baseline[k] = { weight: d.weight ?? null, reps: d.reps ?? null };
     }
     setLogs(fromDb);
@@ -127,28 +137,55 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
   const bbbCategory = categories[0] ?? 'push';
   const bbbWeight = bbbFor(tm, roundingIncrement);
   const bbbKey = logKey(bbbCategory, BBB_NAME);
-  const bbbDone = done.some((d) => d.category === bbbCategory && d.name === BBB_NAME && d.liftKey === liftKey);
+  const bbbRow = done.find((d) => d.liftKey === liftKey && d.category === bbbCategory && d.name === BBB_NAME);
+  const bbbDone = bbbRow ? (bbbRow.done ?? true) : false;
 
-  async function toggleDone(category: AssistanceCategory, name: string) {
-    await supportingDoneRepo.toggle(todayIso(), liftKey, category, name);
+  // Today's rows for this lift, excluding the pinned BBB row (BBB is always
+  // shown regardless of whether it has a row yet).
+  const selectedToday = done.filter(
+    (d) => d.liftKey === liftKey && !(d.category === bbbCategory && d.name === BBB_NAME),
+  );
+
+  function schemeFor(category: AssistanceCategory, name: string): string {
+    const catalogItem = SUPPORTING_CATALOG[category].find((i) => i.name === name);
+    if (catalogItem) return catalogItem.scheme;
+    const customItem = customs.find((c) => c.category === category && c.name === name);
+    return customItem?.scheme ?? '';
+  }
+
+  async function markDone(category: AssistanceCategory, name: string, next: boolean) {
+    await supportingDoneRepo.setDone(todayIso(), liftKey, category, name, next);
+    await refresh();
+  }
+
+  async function selectItem(category: AssistanceCategory, name: string) {
+    const dateStr = todayIso();
+    const seed = await supportingDoneRepo.lastLogged(category, name, dateStr);
+    await supportingDoneRepo.select(dateStr, liftKey, category, name, seed ?? undefined);
     const doneList = await refresh();
+
+    // Pre-fill the local draft for the newly-selected row from whatever it
+    // was seeded with, extending the initial-mount seed logic above so a
+    // pick-from-catalog also lands in `logs`/`committedRef`.
     const k = logKey(category, name);
-    const stillThere = doneList.some(
-      (d) => d.liftKey === liftKey && d.category === category && d.name === name,
-    );
-    // toggle() only ever adds a null/null row or deletes the row entirely, so
-    // either way the persisted baseline for this key is now null/null.
-    committedRef.current = { ...committedRef.current, [k]: { weight: null, reps: null } };
-    if (!stillThere) {
-      // Turned off: clear any local draft so a stale typed value doesn't
-      // linger in the input after the row is gone.
-      setLogs((prev) => {
-        if (!(k in prev)) return prev;
-        const next = { ...prev };
-        delete next[k];
-        return next;
-      });
+    const row = doneList.find((d) => d.liftKey === liftKey && d.category === category && d.name === name);
+    if (row) {
+      setLogs((prev) => ({ ...prev, [k]: draftFromRow(row) }));
+      committedRef.current = { ...committedRef.current, [k]: { weight: row.weight ?? null, reps: row.reps ?? null } };
     }
+  }
+
+  async function removeToday(category: AssistanceCategory, name: string) {
+    await supportingDoneRepo.deselect(todayIso(), liftKey, category, name);
+    await refresh();
+    const k = logKey(category, name);
+    setLogs((prev) => {
+      if (!(k in prev)) return prev;
+      const next = { ...prev };
+      delete next[k];
+      return next;
+    });
+    committedRef.current = { ...committedRef.current, [k]: { weight: null, reps: null } };
   }
 
   function updateLocalField(category: AssistanceCategory, name: string, field: FieldKind, value: string) {
@@ -223,200 +260,252 @@ export default function SupportingLifts({ liftKey, tm, unit, roundingIncrement }
       </button>
 
       {open && (
-        <div className="flex flex-col gap-3 px-4 pb-4">
-          <div className="flex items-center gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-[13px]">
-            <input
-              type="checkbox"
-              checked={bbbDone}
-              onChange={() => toggleDone(bbbCategory, BBB_NAME)}
-              aria-label={`Mark ${BBB_NAME} done`}
-              className="h-5 w-5 flex-none accent-[var(--accent)]"
-            />
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate font-extrabold">{BBB_NAME}</span>
-              <span className="truncate text-[11px] font-semibold text-[var(--muted)] tabular-nums">
-                same lift, for size · 5 × 10
-              </span>
-            </span>
-            <input
-              id={inputId(bbbCategory, BBB_NAME, 'weight')}
-              type="text"
-              inputMode="decimal"
-              aria-label={`${BBB_NAME} weight`}
-              placeholder={String(bbbWeight)}
-              value={logs[bbbKey]?.weight ?? ''}
-              onChange={(e) => updateLocalField(bbbCategory, BBB_NAME, 'weight', e.target.value)}
-              onBlur={() => commitField(bbbCategory, BBB_NAME, 'weight')}
-              className={`w-12 flex-none ${numberInputClass}`}
-            />
-            <span className="flex-none text-[11px] font-bold text-[var(--muted)]">{unit}</span>
-            <span className="flex-none text-[11px] font-bold text-[var(--muted)]">×</span>
-            <input
-              id={inputId(bbbCategory, BBB_NAME, 'reps')}
-              type="number"
-              inputMode="numeric"
-              min={0}
-              aria-label={`${BBB_NAME} reps`}
-              placeholder="10"
-              value={logs[bbbKey]?.reps ?? ''}
-              onChange={(e) => updateLocalField(bbbCategory, BBB_NAME, 'reps', e.target.value)}
-              onBlur={() => commitField(bbbCategory, BBB_NAME, 'reps')}
-              className={`w-10 flex-none ${numberInputClass}`}
-            />
+        <div className="flex flex-col gap-4 px-4 pb-4">
+          <div className="flex flex-col gap-2">
+            <h3 className="text-[12px] font-bold uppercase tracking-wide text-[var(--muted)]">
+              Today&apos;s supporting work
+            </h3>
+
+            <ul className="flex flex-col gap-1 list-none p-0 m-0">
+              <li className="flex items-center gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-[13px]">
+                <input
+                  type="checkbox"
+                  checked={bbbDone}
+                  onChange={() => markDone(bbbCategory, BBB_NAME, !bbbDone)}
+                  aria-label={`Mark ${BBB_NAME} done`}
+                  className="h-5 w-5 flex-none accent-[var(--accent)]"
+                />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate font-extrabold">{BBB_NAME}</span>
+                  <span className="truncate text-[11px] font-semibold text-[var(--muted)] tabular-nums">
+                    same lift, for size · 5 × 10
+                  </span>
+                </span>
+                <input
+                  id={inputId(bbbCategory, BBB_NAME, 'weight')}
+                  type="text"
+                  inputMode="decimal"
+                  aria-label={`${BBB_NAME} weight`}
+                  placeholder={String(bbbWeight)}
+                  value={logs[bbbKey]?.weight ?? ''}
+                  onChange={(e) => updateLocalField(bbbCategory, BBB_NAME, 'weight', e.target.value)}
+                  onBlur={() => commitField(bbbCategory, BBB_NAME, 'weight')}
+                  className={`w-12 flex-none ${numberInputClass}`}
+                />
+                <span className="flex-none text-[11px] font-bold text-[var(--muted)]">{unit}</span>
+                <span className="flex-none text-[11px] font-bold text-[var(--muted)]">×</span>
+                <input
+                  id={inputId(bbbCategory, BBB_NAME, 'reps')}
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  aria-label={`${BBB_NAME} reps`}
+                  placeholder="10"
+                  value={logs[bbbKey]?.reps ?? ''}
+                  onChange={(e) => updateLocalField(bbbCategory, BBB_NAME, 'reps', e.target.value)}
+                  onBlur={() => commitField(bbbCategory, BBB_NAME, 'reps')}
+                  className={`w-10 flex-none ${numberInputClass}`}
+                />
+              </li>
+
+              {selectedToday.map((d) => {
+                const checked = d.done ?? true;
+                const k = logKey(d.category, d.name);
+                const scheme = schemeFor(d.category, d.name);
+                return (
+                  <li
+                    key={k}
+                    className="flex items-center gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-[13px]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => markDone(d.category, d.name, !checked)}
+                      aria-label={`Mark ${d.name} done`}
+                      className="h-5 w-5 flex-none accent-[var(--accent)]"
+                    />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate font-bold">{d.name}</span>
+                      <span className="truncate text-[11px] font-semibold text-[var(--muted)]">{scheme}</span>
+                    </span>
+                    <input
+                      id={inputId(d.category, d.name, 'weight')}
+                      type="text"
+                      inputMode="decimal"
+                      aria-label={`${d.name} weight`}
+                      value={logs[k]?.weight ?? ''}
+                      onChange={(e) => updateLocalField(d.category, d.name, 'weight', e.target.value)}
+                      onBlur={() => commitField(d.category, d.name, 'weight')}
+                      className={`w-12 flex-none ${numberInputClass}`}
+                    />
+                    <span className="flex-none text-[11px] font-bold text-[var(--muted)]">{unit}</span>
+                    <span className="flex-none text-[11px] font-bold text-[var(--muted)]">×</span>
+                    <input
+                      id={inputId(d.category, d.name, 'reps')}
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      aria-label={`${d.name} reps`}
+                      value={logs[k]?.reps ?? ''}
+                      onChange={(e) => updateLocalField(d.category, d.name, 'reps', e.target.value)}
+                      onBlur={() => commitField(d.category, d.name, 'reps')}
+                      className={`w-10 flex-none ${numberInputClass}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeToday(d.category, d.name)}
+                      aria-label={`Remove ${d.name} from today`}
+                      className="grid h-9 w-9 flex-none place-items-center rounded-[var(--r-pill)] text-[var(--muted)] hover:text-[var(--accent)]"
+                    >
+                      <RemoveIcon />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {selectedToday.length === 0 && (
+              <p className="text-[12px] font-semibold text-[var(--muted)]">
+                Pick exercises below to build today&apos;s list.
+              </p>
+            )}
           </div>
 
-          {categories.map((category) => {
-            const items = supportingList(category, customs, hidden);
-            const isAdding = addingFor === category;
+          <div className="flex flex-col gap-3">
+            <h3 className="text-[12px] font-bold uppercase tracking-wide text-[var(--muted)]">Add exercises</h3>
 
-            return (
-              <section key={category} aria-label={CATEGORY_LABEL[category]}>
-                <h3 className="text-[12px] font-bold uppercase tracking-wide text-[var(--muted)]">
-                  {CATEGORY_LABEL[category]}
-                </h3>
+            {categories.map((category) => {
+              const selectedNames = new Set(
+                selectedToday.filter((d) => d.category === category).map((d) => d.name),
+              );
+              const items = supportingList(category, customs, hidden).filter(
+                (item) => !selectedNames.has(item.name),
+              );
+              const isAdding = addingFor === category;
 
-                <ul className="mt-1.5 flex flex-col gap-1 list-none p-0 m-0">
-                  {items.map((item) => {
-                    const checked = done.some(
-                      (d) => d.category === category && d.name === item.name && d.liftKey === liftKey,
-                    );
-                    const k = logKey(category, item.name);
-                    const confirming = pendingRemove === k;
-                    return (
-                      <li
-                        key={item.name}
-                        className="flex flex-col gap-1 rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-[13px]"
-                      >
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleDone(category, item.name)}
-                            aria-label={`Mark ${item.name} done`}
-                            className="h-5 w-5 flex-none accent-[var(--accent)]"
-                          />
-                          <span className="flex min-w-0 flex-1 flex-col">
-                            <span className="font-bold">{item.name}</span>
-                            <span className="truncate text-[11px] font-semibold text-[var(--muted)]">
-                              {item.scheme}
+              return (
+                <section key={category} aria-label={CATEGORY_LABEL[category]}>
+                  <h3 className="text-[12px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                    {CATEGORY_LABEL[category]}
+                  </h3>
+
+                  <ul className="mt-1.5 flex flex-col gap-1.5 list-none p-0 m-0">
+                    {items.map((item) => {
+                      const k = logKey(category, item.name);
+                      const confirming = pendingRemove === k;
+                      return (
+                        <li
+                          key={item.name}
+                          className="flex flex-col gap-1.5 rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-[13px]"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="flex min-w-0 flex-1 flex-col">
+                              <span className="font-bold">{item.name}</span>
+                              <span className="truncate text-[11px] font-semibold text-[var(--muted)]">
+                                {item.scheme}
+                              </span>
                             </span>
-                          </span>
 
-                          {confirming ? (
-                            <span className="flex flex-none items-center gap-1.5">
-                              <span className="text-[11px] font-semibold text-[var(--muted)]">Remove?</span>
+                            {confirming ? (
+                              <span className="flex flex-none items-center gap-1.5">
+                                <span className="text-[11px] font-semibold text-[var(--muted)]">Remove?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingRemove(null)}
+                                  className="rounded-[var(--r-pill)] px-2 py-1 text-[11px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    removeItem(category, item);
+                                    setPendingRemove(null);
+                                  }}
+                                  aria-label={`Confirm remove ${item.name}`}
+                                  className="rounded-[var(--r-pill)] bg-[var(--accent)] px-2 py-1 text-[11px] font-extrabold text-[var(--on-accent)]"
+                                >
+                                  Remove
+                                </button>
+                              </span>
+                            ) : (
                               <button
                                 type="button"
-                                onClick={() => setPendingRemove(null)}
-                                className="rounded-[var(--r-pill)] px-2 py-1 text-[11px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
+                                onClick={() => setPendingRemove(k)}
+                                aria-label={`Remove ${item.name} from list`}
+                                className="grid h-9 w-9 flex-none place-items-center rounded-[var(--r-pill)] text-[var(--muted)] hover:text-[var(--accent)]"
                               >
-                                Cancel
+                                <RemoveIcon />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  removeItem(category, item);
-                                  setPendingRemove(null);
-                                }}
-                                aria-label={`Confirm remove ${item.name}`}
-                                className="rounded-[var(--r-pill)] bg-[var(--accent)] px-2 py-1 text-[11px] font-extrabold text-[var(--on-accent)]"
-                              >
-                                Remove
-                              </button>
-                            </span>
-                          ) : (
+                            )}
+                          </div>
+
+                          {!confirming && (
                             <button
                               type="button"
-                              onClick={() => setPendingRemove(k)}
-                              aria-label={`Remove ${item.name}`}
-                              className="grid h-9 w-9 flex-none place-items-center rounded-[var(--r-pill)] text-[var(--muted)] hover:text-[var(--accent)]"
+                              onClick={() => selectItem(category, item.name)}
+                              aria-label={`Add ${item.name}`}
+                              className="w-full rounded-lg border border-dashed border-[var(--line)] py-1.5 text-center text-[12px] font-extrabold text-[var(--accent)]"
                             >
-                              <RemoveIcon />
+                              ＋ Add
                             </button>
                           )}
-                        </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
 
-                        {!confirming && (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <input
-                              id={inputId(category, item.name, 'weight')}
-                              type="text"
-                              inputMode="decimal"
-                              aria-label={`${item.name} weight`}
-                              value={logs[k]?.weight ?? ''}
-                              onChange={(e) => updateLocalField(category, item.name, 'weight', e.target.value)}
-                              onBlur={() => commitField(category, item.name, 'weight')}
-                              className={`w-12 flex-none ${numberInputClass}`}
-                            />
-                            <span className="flex-none text-[11px] font-bold text-[var(--muted)]">{unit}</span>
-                            <span className="flex-none text-[11px] font-bold text-[var(--muted)]">×</span>
-                            <input
-                              id={inputId(category, item.name, 'reps')}
-                              type="number"
-                              inputMode="numeric"
-                              min={0}
-                              aria-label={`${item.name} reps`}
-                              value={logs[k]?.reps ?? ''}
-                              onChange={(e) => updateLocalField(category, item.name, 'reps', e.target.value)}
-                              onBlur={() => commitField(category, item.name, 'reps')}
-                              className={`w-10 flex-none ${numberInputClass}`}
-                            />
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-
-                {isAdding ? (
-                  <form onSubmit={(e) => submitAdd(e, category)} className="mt-2 flex items-end gap-2">
-                    <label
-                      htmlFor={`supporting-add-name-${category}`}
-                      className="flex flex-1 flex-col text-[12px] font-semibold text-[var(--muted)]"
-                    >
-                      Exercise name
-                      <input
-                        id={`supporting-add-name-${category}`}
-                        type="text"
-                        aria-label="Exercise name"
-                        value={addName}
-                        onChange={(e) => setAddName(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 text-sm font-bold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                      />
-                    </label>
-                    <label
-                      htmlFor={`supporting-add-scheme-${category}`}
-                      className="flex flex-col text-[12px] font-semibold text-[var(--muted)]"
-                    >
-                      Scheme (optional)
-                      <input
-                        id={`supporting-add-scheme-${category}`}
-                        type="text"
-                        aria-label="Scheme (optional)"
-                        value={addScheme}
-                        onChange={(e) => setAddScheme(e.target.value)}
-                        className="mt-1 w-24 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 text-sm font-bold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                      />
-                    </label>
+                  {isAdding ? (
+                    <form onSubmit={(e) => submitAdd(e, category)} className="mt-2 flex items-end gap-2">
+                      <label
+                        htmlFor={`supporting-add-name-${category}`}
+                        className="flex flex-1 flex-col text-[12px] font-semibold text-[var(--muted)]"
+                      >
+                        Exercise name
+                        <input
+                          id={`supporting-add-name-${category}`}
+                          type="text"
+                          aria-label="Exercise name"
+                          value={addName}
+                          onChange={(e) => setAddName(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 text-sm font-bold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                        />
+                      </label>
+                      <label
+                        htmlFor={`supporting-add-scheme-${category}`}
+                        className="flex flex-col text-[12px] font-semibold text-[var(--muted)]"
+                      >
+                        Sets × reps (optional)
+                        <input
+                          id={`supporting-add-scheme-${category}`}
+                          type="text"
+                          aria-label="Sets × reps (optional)"
+                          placeholder="e.g. 3 × 8–12"
+                          value={addScheme}
+                          onChange={(e) => setAddScheme(e.target.value)}
+                          className="mt-1 w-24 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 text-sm font-bold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        className="rounded-[var(--r-pill)] bg-[var(--accent)] px-3 py-1.5 text-[12px] font-extrabold text-[var(--on-accent)]"
+                      >
+                        Add
+                      </button>
+                    </form>
+                  ) : (
                     <button
-                      type="submit"
-                      className="rounded-[var(--r-pill)] bg-[var(--accent)] px-3 py-1.5 text-[12px] font-extrabold text-[var(--on-accent)]"
+                      type="button"
+                      onClick={() => startAdding(category)}
+                      className="mt-2 text-[12px] font-semibold text-[var(--accent)]"
                     >
-                      Add
+                      ＋ Add exercise
                     </button>
-                  </form>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => startAdding(category)}
-                    className="mt-2 text-[12px] font-semibold text-[var(--accent)]"
-                  >
-                    ＋ Add exercise
-                  </button>
-                )}
-              </section>
-            );
-          })}
+                  )}
+                </section>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

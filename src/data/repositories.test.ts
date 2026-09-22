@@ -192,42 +192,6 @@ describe('hiddenSupportingRepo', () => {
   });
 });
 describe('supportingDoneRepo', () => {
-  it('toggles a done marker on then off, and lists via forDate', async () => {
-    await supportingDoneRepo.toggle('2026-02-01', 'press', 'push', 'Dips');
-    let forDay = await supportingDoneRepo.forDate('2026-02-01');
-    expect(forDay).toHaveLength(1);
-    expect(forDay[0]).toMatchObject({ date: '2026-02-01', liftKey: 'press', category: 'push', name: 'Dips' });
-
-    await supportingDoneRepo.toggle('2026-02-01', 'press', 'push', 'Dips');
-    forDay = await supportingDoneRepo.forDate('2026-02-01');
-    expect(forDay).toHaveLength(0);
-  });
-  it('only affects the matching date/liftKey/category/name entry', async () => {
-    await supportingDoneRepo.toggle('2026-02-01', 'press', 'push', 'Dips');
-    await supportingDoneRepo.toggle('2026-02-01', 'press', 'pull', 'Chin-ups');
-    expect(await supportingDoneRepo.forDate('2026-02-01')).toHaveLength(2);
-    expect(await supportingDoneRepo.forDate('2026-02-02')).toHaveLength(0);
-  });
-  it('toggle adds then removes a per-lift row with weight/reps null', async () => {
-    await supportingDoneRepo.toggle('2026-09-21', 'press', 'pull', 'Chin-ups');
-    let forDay = await supportingDoneRepo.forDate('2026-09-21');
-    expect(forDay).toHaveLength(1);
-    expect(forDay[0]).toMatchObject({ liftKey: 'press', weight: null, reps: null });
-
-    await supportingDoneRepo.toggle('2026-09-21', 'press', 'pull', 'Chin-ups');
-    forDay = await supportingDoneRepo.forDate('2026-09-21');
-    expect(forDay).toHaveLength(0);
-  });
-  it('keeps done state independent per lift for the same category/name', async () => {
-    await supportingDoneRepo.toggle('2026-09-21', 'press', 'pull', 'Chin-ups');
-    await supportingDoneRepo.toggle('2026-09-21', 'bench', 'pull', 'Chin-ups');
-    expect(await supportingDoneRepo.forDate('2026-09-21')).toHaveLength(2);
-
-    await supportingDoneRepo.toggle('2026-09-21', 'press', 'pull', 'Chin-ups');
-    const forDay = await supportingDoneRepo.forDate('2026-09-21');
-    expect(forDay).toHaveLength(1);
-    expect(forDay[0]).toMatchObject({ liftKey: 'bench', category: 'pull', name: 'Chin-ups' });
-  });
   it('log upserts weight/reps, creating a done row and patching fields independently', async () => {
     await supportingDoneRepo.log('2026-09-21', 'press', 'pull', 'Chin-ups', { weight: 20, reps: 12 });
     let forDay = await supportingDoneRepo.forDate('2026-09-21');

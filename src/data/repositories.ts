@@ -90,15 +90,6 @@ function findMatch(date: string, liftKey: LiftKey, category: AssistanceCategory,
 }
 
 export const supportingDoneRepo = {
-  // KEPT for the not-yet-migrated component; removed in Task 3. Adds a done:true row.
-  toggle: async (date: string, liftKey: LiftKey, category: AssistanceCategory, name: string): Promise<void> => {
-    const existing = await findMatch(date, liftKey, category, name);
-    if (existing?.id !== undefined) {
-      await db.supportingDone.delete(existing.id);
-    } else {
-      await db.supportingDone.add({ date, liftKey, category, name, weight: null, reps: null, done: true });
-    }
-  },
   select: async (
     date: string, liftKey: LiftKey, category: AssistanceCategory, name: string,
     seed?: { weight: number | null; reps: number | null },

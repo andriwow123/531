@@ -30,6 +30,13 @@ describe('SupportingLifts', () => {
     expect(within(pushSection).getByText('Dips')).toBeTruthy();
   });
 
+  it('shows the two zone headings', async () => {
+    renderExpanded();
+
+    expect(await screen.findByText("Today's supporting work")).toBeTruthy();
+    expect(screen.getByText('Add exercises')).toBeTruthy();
+  });
+
   it('shows a long exercise name in full, not truncated', async () => {
     renderExpanded();
 
@@ -48,25 +55,29 @@ describe('SupportingLifts', () => {
     expect(repsInput.placeholder).toBe('10');
   });
 
-  it('renders weight and reps inputs for a catalog exercise and for Boring But Big', async () => {
+  it('shows an empty-state message in Today when nothing besides BBB is selected', async () => {
     renderExpanded();
 
-    const pushSection = await screen.findByRole('region', { name: 'Push' });
-    await within(pushSection).findByText('Dips');
+    await screen.findByText('Boring But Big');
+    expect(screen.getByText(/pick exercises below to build today's list/i)).toBeTruthy();
+  });
 
-    expect(within(pushSection).getByLabelText('Dips weight')).toBeTruthy();
-    expect(within(pushSection).getByLabelText('Dips reps')).toBeTruthy();
+  it('renders weight and reps inputs for a selected exercise and for Boring But Big', async () => {
+    await supportingDoneRepo.select(today, 'press', 'push', 'Dips');
+    renderExpanded();
+
+    await screen.findByLabelText('Dips weight');
+    expect(screen.getByLabelText('Dips weight')).toBeTruthy();
+    expect(screen.getByLabelText('Dips reps')).toBeTruthy();
     expect(screen.getByLabelText(/boring but big weight/i)).toBeTruthy();
     expect(screen.getByLabelText(/boring but big reps/i)).toBeTruthy();
   });
 
-  it('logs weight and reps on blur, persisting per liftKey and marking the row done', async () => {
+  it('logs weight and reps on blur for a selected exercise, persisting per liftKey (without marking it done)', async () => {
+    await supportingDoneRepo.select(today, 'press', 'push', 'Dips');
     renderExpanded();
 
-    const pushSection = await screen.findByRole('region', { name: 'Push' });
-    await within(pushSection).findByText('Dips');
-
-    const weightInput = within(pushSection).getByLabelText('Dips weight');
+    const weightInput = await screen.findByLabelText('Dips weight');
     fireEvent.change(weightInput, { target: { value: '40' } });
     fireEvent.blur(weightInput);
 
@@ -76,7 +87,7 @@ describe('SupportingLifts', () => {
       expect(row?.weight).toBe(40);
     });
 
-    const repsInput = within(pushSection).getByLabelText('Dips reps');
+    const repsInput = screen.getByLabelText('Dips reps');
     fireEvent.change(repsInput, { target: { value: '12' } });
     fireEvent.blur(repsInput);
 
@@ -87,42 +98,36 @@ describe('SupportingLifts', () => {
       expect(row?.reps).toBe(12);
     });
 
-    await waitFor(() => {
-      expect(
-        (within(pushSection).getByRole('checkbox', { name: /mark dips done/i }) as HTMLInputElement).checked,
-      ).toBe(true);
-    });
+    // logging weight/reps alone never flips the done flag — only the checkmark does
+    expect(
+      (screen.getByRole('checkbox', { name: /mark dips done/i }) as HTMLInputElement).checked,
+    ).toBe(false);
   });
 
-  it('does not create a row when blurring an untouched weight or reps input (tab-through, no typing)', async () => {
+  it('does not create a BBB row when blurring untouched weight or reps inputs (tab-through, no typing)', async () => {
     renderExpanded();
+    await screen.findByText('Boring But Big');
 
-    const pushSection = await screen.findByRole('region', { name: 'Push' });
-    await within(pushSection).findByText('Dips');
+    const weightInput = screen.getByLabelText(/boring but big weight/i);
+    const repsInput = screen.getByLabelText(/boring but big reps/i);
 
-    const weightInput = within(pushSection).getByLabelText('Dips weight');
-    const repsInput = within(pushSection).getByLabelText('Dips reps');
-
-    // Simulate checkbox -> weight -> reps -> next row tab navigation with no typing.
+    // Simulate tab navigation with no typing.
     fireEvent.blur(weightInput);
     fireEvent.blur(repsInput);
 
     const done = await supportingDoneRepo.forDate(today);
-    expect(done.some((d) => d.liftKey === 'press' && d.category === 'push' && d.name === 'Dips')).toBe(false);
-    expect(done).toHaveLength(0);
+    expect(done.some((d) => d.liftKey === 'press' && d.name === 'Boring But Big')).toBe(false);
 
     expect(
-      (within(pushSection).getByRole('checkbox', { name: /mark dips done/i }) as HTMLInputElement).checked,
+      (screen.getByRole('checkbox', { name: /mark boring but big done/i }) as HTMLInputElement).checked,
     ).toBe(false);
   });
 
   it('clearing a previously-logged value updates the persisted row instead of leaving it stale', async () => {
+    await supportingDoneRepo.select(today, 'press', 'push', 'Dips');
     renderExpanded();
 
-    const pushSection = await screen.findByRole('region', { name: 'Push' });
-    await within(pushSection).findByText('Dips');
-
-    const weightInput = within(pushSection).getByLabelText('Dips weight');
+    const weightInput = (await screen.findByLabelText('Dips weight')) as HTMLInputElement;
     fireEvent.change(weightInput, { target: { value: '40' } });
     fireEvent.blur(weightInput);
 
@@ -143,12 +148,13 @@ describe('SupportingLifts', () => {
     });
   });
 
-  it('scopes weight/reps and done state per liftKey', async () => {
+  it('scopes weight/reps and selection state per liftKey', async () => {
+    await supportingDoneRepo.select(today, 'press', 'push', 'Dips');
+
     render(<SupportingLifts liftKey="press" tm={100} unit="kg" roundingIncrement={5} />);
     fireEvent.click(screen.getAllByRole('button', { name: /supporting lifts/i })[0]);
 
-    const pressPush = await screen.findByRole('region', { name: 'Push' });
-    const pressWeight = within(pressPush).getByLabelText('Dips weight');
+    const pressWeight = await screen.findByLabelText('Dips weight');
     fireEvent.change(pressWeight, { target: { value: '40' } });
     fireEvent.blur(pressWeight);
 
@@ -164,12 +170,10 @@ describe('SupportingLifts', () => {
     const benchSections = await screen.findAllByRole('region', { name: 'Push' });
     const benchPush = benchSections[benchSections.length - 1];
 
+    // Dips is still unselected under bench: it's in bench's catalog, not bench's Today.
     await within(benchPush).findByText('Dips');
-    const benchWeightInput = within(benchPush).getByLabelText('Dips weight') as HTMLInputElement;
-    const benchCheckbox = within(benchPush).getByRole('checkbox', { name: /mark dips done/i }) as HTMLInputElement;
-
-    expect(benchWeightInput.value).toBe('');
-    expect(benchCheckbox.checked).toBe(false);
+    expect(within(benchPush).getByRole('button', { name: /^Add Dips$/i })).toBeTruthy();
+    expect(screen.queryAllByLabelText('Dips weight')).toHaveLength(1);
   });
 
   it('adds a custom exercise under a category, persisting it', async () => {
@@ -193,13 +197,24 @@ describe('SupportingLifts', () => {
     });
   });
 
+  it('the add-exercise form shows "Sets × reps (optional)"', async () => {
+    renderExpanded();
+
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    fireEvent.click(within(pushSection).getByRole('button', { name: /add exercise/i }));
+
+    const schemeInput = within(pushSection).getByLabelText('Sets × reps (optional)') as HTMLInputElement;
+    expect(schemeInput).toBeTruthy();
+    expect(schemeInput.placeholder).toBe('e.g. 3 × 8–12');
+  });
+
   it('shows a confirm step before removing a built-in exercise, without deleting it yet', async () => {
     renderExpanded();
 
     const pushSection = await screen.findByRole('region', { name: 'Push' });
     await within(pushSection).findByText('Dips');
 
-    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove Dips$/i }));
+    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove Dips from list$/i }));
 
     expect(within(pushSection).getByText('Dips')).toBeTruthy();
     expect(within(pushSection).getByRole('button', { name: /cancel/i })).toBeTruthy();
@@ -215,12 +230,12 @@ describe('SupportingLifts', () => {
     const pushSection = await screen.findByRole('region', { name: 'Push' });
     await within(pushSection).findByText('Dips');
 
-    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove Dips$/i }));
+    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove Dips from list$/i }));
     fireEvent.click(within(pushSection).getByRole('button', { name: /cancel/i }));
 
     expect(within(pushSection).getByText('Dips')).toBeTruthy();
     expect(within(pushSection).queryByRole('button', { name: /cancel/i })).toBeNull();
-    expect(within(pushSection).getByRole('button', { name: /^Remove Dips$/i })).toBeTruthy();
+    expect(within(pushSection).getByRole('button', { name: /^Remove Dips from list$/i })).toBeTruthy();
 
     const hidden = await hiddenSupportingRepo.all();
     expect(hidden.some((h) => h.category === 'push' && h.name === 'Dips')).toBe(false);
@@ -232,7 +247,7 @@ describe('SupportingLifts', () => {
     const pushSection = await screen.findByRole('region', { name: 'Push' });
     await within(pushSection).findByText('Dips');
 
-    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove Dips$/i }));
+    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove Dips from list$/i }));
     fireEvent.click(within(pushSection).getByRole('button', { name: /confirm remove dips/i }));
 
     await waitFor(() => {
@@ -260,7 +275,7 @@ describe('SupportingLifts', () => {
       expect(within(pushSection).getByText('JM Press')).toBeTruthy();
     });
 
-    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove JM Press$/i }));
+    fireEvent.click(within(pushSection).getByRole('button', { name: /^Remove JM Press from list$/i }));
     fireEvent.click(within(pushSection).getByRole('button', { name: /confirm remove jm press/i }));
 
     await waitFor(() => {
@@ -273,30 +288,70 @@ describe('SupportingLifts', () => {
     });
   });
 
-  it('toggles an item done, persisting and clearing via supportingDoneRepo', async () => {
+  it('picking a catalog exercise moves it into Today and pre-fills from the last logged entry', async () => {
+    await supportingDoneRepo.select('2020-01-01', 'press', 'push', 'Dips', { weight: 30, reps: 12 }); // a prior day
+
+    renderExpanded();
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    await within(pushSection).findByText('Dips');
+
+    fireEvent.click(within(pushSection).getByRole('button', { name: /^Add Dips$/i }));
+
+    await waitFor(() => {
+      expect(within(pushSection).queryByText('Dips')).toBeNull();
+    });
+
+    const weightInput = (await screen.findByLabelText('Dips weight')) as HTMLInputElement;
+    expect(weightInput.value).toBe('30');
+    const repsInput = screen.getByLabelText('Dips reps') as HTMLInputElement;
+    expect(repsInput.value).toBe('12');
+  });
+
+  it('the Today checkmark marks done without removing the row', async () => {
+    await supportingDoneRepo.select(today, 'press', 'push', 'Dips');
     renderExpanded();
 
-    const pushSection = await screen.findByRole('region', { name: 'Push' });
-    const checkbox = within(pushSection).getByRole('checkbox', { name: /mark dips done/i });
+    const checkbox = (await screen.findByRole('checkbox', { name: /mark dips done/i })) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
 
     fireEvent.click(checkbox);
 
     await waitFor(async () => {
       const done = await supportingDoneRepo.forDate(today);
-      expect(done.some((d) => d.category === 'push' && d.name === 'Dips')).toBe(true);
+      const row = done.find((d) => d.liftKey === 'press' && d.category === 'push' && d.name === 'Dips');
+      expect(row?.done).toBe(true);
     });
 
     await waitFor(() => {
       expect(
-        (within(pushSection).getByRole('checkbox', { name: /mark dips done/i }) as HTMLInputElement).checked,
+        (screen.getByRole('checkbox', { name: /mark dips done/i }) as HTMLInputElement).checked,
       ).toBe(true);
     });
 
-    fireEvent.click(within(pushSection).getByRole('checkbox', { name: /mark dips done/i }));
+    // still present, not removed
+    expect(screen.getByText('Dips')).toBeTruthy();
+    expect(screen.getByLabelText('Dips weight')).toBeTruthy();
+  });
+
+  it('remove-from-today deselects the exercise (row gone, back in catalog)', async () => {
+    await supportingDoneRepo.select(today, 'press', 'push', 'Dips');
+    renderExpanded();
+
+    await screen.findByLabelText('Dips weight');
+
+    fireEvent.click(screen.getByRole('button', { name: /remove dips from today/i }));
 
     await waitFor(async () => {
       const done = await supportingDoneRepo.forDate(today);
-      expect(done.some((d) => d.category === 'push' && d.name === 'Dips')).toBe(false);
+      expect(done.some((d) => d.liftKey === 'press' && d.category === 'push' && d.name === 'Dips')).toBe(false);
     });
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Dips weight')).toBeNull();
+    });
+
+    const pushSection = await screen.findByRole('region', { name: 'Push' });
+    expect(within(pushSection).getByText('Dips')).toBeTruthy();
+    expect(within(pushSection).getByRole('button', { name: /^Add Dips$/i })).toBeTruthy();
   });
 });

@@ -140,7 +140,7 @@ describe('convertUnits — assistance & supporting-lift weights', () => {
     await assistanceRepo.add({ date: '2026-02-01', category: 'pull', name: 'Chin-ups', sets: 3, reps: 8, weight: null });
 
     await supportingDoneRepo.log('2026-02-01', 'press', 'pull', 'Chin-ups', { weight: 20, reps: 12 });
-    await supportingDoneRepo.toggle('2026-02-01', 'bench', 'push', 'Dips'); // weight/reps left null
+    await supportingDoneRepo.select('2026-02-01', 'bench', 'push', 'Dips'); // weight/reps left null
 
     await convertUnits('lb');
 
@@ -154,10 +154,10 @@ describe('convertUnits — assistance & supporting-lift weights', () => {
 
     const supportingDone = await supportingDoneRepo.forDate('2026-02-01');
     const loggedChinups = supportingDone.find((s) => s.liftKey === 'press' && s.name === 'Chin-ups');
-    const toggledDips = supportingDone.find((s) => s.liftKey === 'bench' && s.name === 'Dips');
+    const selectedDips = supportingDone.find((s) => s.liftKey === 'bench' && s.name === 'Dips');
     expect(loggedChinups?.weight).toBe(roundToIncrement(20 * KG_TO_LB, 5));
     expect(loggedChinups).toMatchObject({ reps: 12, category: 'pull', name: 'Chin-ups' });
-    expect(toggledDips?.weight).toBeNull();
-    expect(toggledDips?.reps).toBeNull();
+    expect(selectedDips?.weight).toBeNull();
+    expect(selectedDips?.reps).toBeNull();
   });
 });
