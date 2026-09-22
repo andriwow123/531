@@ -135,6 +135,19 @@ describe('bodyweightRepo', () => {
     await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
     expect(await bodyweightRepo.all()).toHaveLength(2);
   });
+
+  it('updates an entry weight, then removes it (round-trip via all())', async () => {
+    const id = await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
+
+    await bodyweightRepo.update(id, { weight: 85.5 });
+    let all = await bodyweightRepo.all();
+    expect(all).toHaveLength(1);
+    expect(all[0].weight).toBe(85.5);
+
+    await bodyweightRepo.remove(id);
+    all = await bodyweightRepo.all();
+    expect(all).toHaveLength(0);
+  });
 });
 describe('assistanceRepo', () => {
   it('adds entries for a date and lists them via forDate', async () => {

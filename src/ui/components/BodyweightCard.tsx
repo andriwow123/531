@@ -10,10 +10,20 @@ import {
   YAxis,
 } from 'recharts';
 import type { DotItemDotProps, TooltipContentProps } from 'recharts';
-import { bodyweightSeries, latestWeight } from '../../domain';
+import { bodyweightSeries, latestWeight, bodyweightAxis } from '../../domain';
 import type { Unit } from '../../domain';
 import { bodyweightRepo, profileRepo } from '../../data/repositories';
 import type { BodyweightEntry } from '../../data/repositories';
+
+/** Parses a possibly comma-decimal weight string; returns null if it isn't a
+ *  finite, positive number (the shared validity rule for both logging and
+ *  editing an entry). */
+function parseWeightInput(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const weight = Number(raw.replace(',', '.'));
+  if (!Number.isFinite(weight) || weight <= 0) return null;
+  return weight;
+}
 
 interface ChartColors {
   accent: string;
@@ -128,6 +138,9 @@ interface LoadedData {
 export default function BodyweightCard() {
   const [data, setData] = useState<LoadedData | undefined>(undefined);
   const [input, setInput] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
   const colors = useThemeColors();
 
   async function load() {
@@ -152,15 +165,55 @@ export default function BodyweightCard() {
   const latest = latestWeight(entries);
   const chartData = useMemo(() => buildChartData(bodyweightSeries(entries)), [entries]);
   const hasData = chartData.length > 0;
+  const axis = useMemo(() => bodyweightAxis(chartData.map((p) => p.weight)), [chartData]);
+
+  const sortedEntries = useMemo(
+    () =>
+      entries
+        .filter((e): e is BodyweightEntry & { id: number } => e.id != null)
+        .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id),
+    [entries],
+  );
 
   const headlineDot = useMemo(() => makeHeadlineDot(colors.accent, colors.surface), [colors.accent, colors.surface]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const weight = Number(input.replace(',', '.'));
-    if (!input.trim() || !Number.isFinite(weight) || weight <= 0) return;
+    const weight = parseWeightInput(input);
+    if (weight == null) return;
     await bodyweightRepo.add({ date: new Date().toISOString().slice(0, 10), weight });
     setInput('');
+    await load();
+  }
+
+  function startEdit(id: number, weight: number) {
+    setEditingId(id);
+    setEditValue(String(weight));
+    setConfirmingDeleteId(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditValue('');
+  }
+
+  async function saveEdit(id: number) {
+    const weight = parseWeightInput(editValue);
+    if (weight == null) return;
+    await bodyweightRepo.update(id, { weight });
+    setEditingId(null);
+    setEditValue('');
+    await load();
+  }
+
+  function startDeleteConfirm(id: number) {
+    setConfirmingDeleteId(id);
+    setEditingId(null);
+  }
+
+  async function confirmDelete(id: number) {
+    await bodyweightRepo.remove(id);
+    setConfirmingDeleteId(null);
     await load();
   }
 
@@ -214,7 +267,9 @@ export default function BodyweightCard() {
                 tickLine={false}
                 axisLine={false}
                 width={36}
-                domain={['auto', 'auto']}
+                domain={axis.domain}
+                ticks={axis.ticks}
+                allowDecimals={false}
               />
               <Tooltip
                 content={(props) => <BwTooltip {...props} unit={unit} />}
@@ -235,6 +290,92 @@ export default function BodyweightCard() {
         </div>
       ) : (
         <p className="mt-4 text-sm text-[var(--muted)]">Log your bodyweight to see the trend.</p>
+      )}
+
+      {sortedEntries.length > 0 && (
+        <ul className="mt-4 flex flex-col gap-1.5 list-none p-0 m-0">
+          {sortedEntries.map((entry) => {
+            const dateLabel = formatAxisDate(entry.date);
+            const isEditing = editingId === entry.id;
+            const isConfirmingDelete = confirmingDeleteId === entry.id;
+            return (
+              <li
+                key={entry.id}
+                className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-[13px]"
+              >
+                <span className="font-semibold text-[var(--muted)]">{dateLabel}</span>
+
+                {isEditing ? (
+                  <span className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      aria-label={`Edit ${entry.date} weight`}
+                      value={editValue}
+                      onChange={(ev) => setEditValue(ev.target.value)}
+                      autoFocus
+                      className="w-20 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-center font-bold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="min-h-[32px] rounded-[var(--r-pill)] px-2 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => saveEdit(entry.id)}
+                      className="min-h-[32px] rounded-[var(--r-pill)] bg-[var(--accent)] px-3 text-[12px] font-extrabold text-[var(--on-accent)]"
+                    >
+                      Save
+                    </button>
+                  </span>
+                ) : isConfirmingDelete ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[12px] font-semibold text-[var(--muted)]">Delete?</span>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDeleteId(null)}
+                      className="min-h-[32px] rounded-[var(--r-pill)] px-2 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => confirmDelete(entry.id)}
+                      aria-label={`Confirm delete ${entry.date} entry`}
+                      className="min-h-[32px] rounded-[var(--r-pill)] bg-[var(--accent)] px-3 text-[12px] font-extrabold text-[var(--on-accent)]"
+                    >
+                      Delete
+                    </button>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <span className="font-bold tabular-nums text-[var(--text)]">{entry.weight}</span>
+                    <span className="text-[var(--muted)]">{unit}</span>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(entry.id, entry.weight)}
+                      aria-label={`Edit ${entry.date} weight`}
+                      className="min-h-[32px] min-w-[32px] rounded-[var(--r-pill)] px-2 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--accent)]"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startDeleteConfirm(entry.id)}
+                      aria-label={`Delete ${entry.date} entry`}
+                      className="min-h-[32px] min-w-[32px] rounded-[var(--r-pill)] px-2 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--accent)]"
+                    >
+                      Delete
+                    </button>
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </section>
   );

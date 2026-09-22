@@ -16,7 +16,7 @@ export { estimatedOneRmSeries, trainingMaxSeries, personalRecord, cycleLog } fro
 export type { OneRmPoint, TmPoint, PR, CycleLogEntry, CycleLogGroup } from './history';
 export { EXERCISE_DEMOS, getExerciseDemo } from './exercises';
 export type { ExerciseDemo } from './exercises';
-export { bodyweightSeries, latestWeight } from './bodyweight';
+export { bodyweightSeries, latestWeight, bodyweightAxis } from './bodyweight';
 export { ASSISTANCE_CATALOG, exerciseOptions } from './assistanceCatalog';
 export { SUPPORTING_CATALOG, categoriesForLift, bbbFor, supportingList } from './supportingCatalog';
 export type { SupportingItem } from './supportingCatalog';

@@ -62,6 +62,8 @@ export const settingsRepo = {
 export const bodyweightRepo = {
   add: (e: BodyweightEntry): Promise<number> => db.bodyweight.add(e),
   all: (): Promise<BodyweightEntry[]> => db.bodyweight.toArray(),
+  update: (id: number, patch: Partial<BodyweightEntry>): Promise<void> => db.bodyweight.update(id, patch).then(() => {}),
+  remove: (id: number): Promise<void> => db.bodyweight.delete(id),
 };
 export const assistanceRepo = {
   add: (e: AssistanceEntry) => db.assistance.add(e),
