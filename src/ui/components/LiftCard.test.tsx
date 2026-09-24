@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { db } from '../../data/db';
-import { cycleRepo, sessionRepo } from '../../data/repositories';
-import type { Cycle } from '../../data/repositories';
+import { cycleRepo, sessionRepo, workoutDayRepo } from '../../data/repositories';
+import type { Cycle, Session } from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
 import { SettingsProvider } from '../settings/SettingsContext';
 import LiftCard from './LiftCard';
@@ -25,8 +26,8 @@ async function seedCycle(): Promise<Cycle> {
   return { ...cycle, id };
 }
 
-function renderCard(cycle: Cycle, overrides: Partial<Parameters<typeof LiftCard>[0]> = {}) {
-  return render(
+function cardFor(cycle: Cycle, overrides: Partial<Parameters<typeof LiftCard>[0]> = {}) {
+  return (
     <SettingsProvider>
       <LiftCard
         liftKey="deadlift"
@@ -38,8 +39,12 @@ function renderCard(cycle: Cycle, overrides: Partial<Parameters<typeof LiftCard>
         settings={defaultSettings}
         {...overrides}
       />
-    </SettingsProvider>,
+    </SettingsProvider>
   );
+}
+
+function renderCard(cycle: Cycle, overrides: Partial<Parameters<typeof LiftCard>[0]> = {}) {
+  return render(cardFor(cycle, overrides));
 }
 
 describe('LiftCard', () => {
@@ -375,5 +380,267 @@ describe('LiftCard', () => {
     );
 
     expect(screen.getAllByText('supplemental')).toHaveLength(5);
+  });
+});
+
+// In-progress set checks, typed reps and the note are saved to the day's
+// WorkoutDay row as you go and restored whenever the set list is (re)built.
+// Overhead press, TM 100, 2.5 rounding, week 1: warm-ups 40/50/60, work sets
+// 65/75/85+ (AMRAP = work set 3), BBB back-off 5x10 @ 50, FSL 5x5 @ 65.
+describe('LiftCard in-progress drafts', () => {
+  // Every workoutDayRepo.get issued (the card's draft load and its timer's),
+  // so a test can wait until the day's draft has loaded: taps only save once
+  // it has (a tap in the few ms before may be replaced by the restore).
+  let getSpy: MockInstance<typeof workoutDayRepo.get>;
+
+  beforeEach(() => {
+    getSpy = vi.spyOn(workoutDayRepo, 'get');
+  });
+
+  afterEach(() => {
+    getSpy.mockRestore();
+  });
+
+  async function draftsLoaded() {
+    await act(async () => {
+      await Promise.allSettled(getSpy.mock.results.map((r) => r.value));
+    });
+  }
+
+  const check = (label: string) => screen.getByRole('button', { name: `Mark ${label} done` });
+
+  it('keeps a checked set after the card unmounts and mounts again (navigating away and back, or a reload)', async () => {
+    const cycle = await seedCycle();
+    const first = render(cardFor(cycle, { liftKey: 'press' }));
+    await draftsLoaded();
+
+    fireEvent.click(check('warm-up set 1 (40kg)'));
+    // Leave straight away (e.g. to Settings), while the save is still in flight.
+    first.unmount();
+
+    render(cardFor(cycle, { liftKey: 'press' }));
+    await waitFor(() => expect(check('warm-up set 1 (40kg)')).toHaveAttribute('aria-pressed', 'true'));
+    expect(check('warm-up set 2 (50kg)')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('restores typed AMRAP reps and the note after a remount', async () => {
+    const cycle = await seedCycle();
+    const first = render(cardFor(cycle, { liftKey: 'press' }));
+    await draftsLoaded();
+
+    fireEvent.change(screen.getByLabelText('Reps done'), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: '+ Add note' }));
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'grindy last rep' } });
+    first.unmount();
+
+    render(cardFor(cycle, { liftKey: 'press' }));
+    await waitFor(() => expect(screen.getByLabelText('Reps done')).toHaveValue(8));
+    // The collapsed note bar previews the restored note.
+    expect(screen.getByRole('button', { name: 'grindy last rep' })).toBeTruthy();
+    // Still unlogged: the AMRAP set itself hasn't been marked done.
+    expect(screen.getByRole('button', { name: 'Mark work set 3 (85kg) AMRAP set done' })).toBeTruthy();
+  });
+
+  it('keeps BBB and FSL back-off progress apart across template switches, restoring each on the way back', async () => {
+    const cycle = await seedCycle();
+    const cycleId = cycle.id as number;
+    const bbb: Cycle = { ...cycle, template: 'bbb' };
+    const fsl: Cycle = { ...cycle, template: 'fsl' };
+    const { rerender } = render(cardFor(bbb, { liftKey: 'press' }));
+    await draftsLoaded();
+
+    fireEvent.click(check('supplemental set 1 (50kg)'));
+    fireEvent.click(check('warm-up set 1 (40kg)')); // warm-ups are shared by every template
+
+    rerender(cardFor(fsl, { liftKey: 'press' }));
+    expect(check('supplemental set 1 (65kg)')).toHaveAttribute('aria-pressed', 'false');
+    expect(check('warm-up set 1 (40kg)')).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(check('supplemental set 2 (65kg)'));
+
+    rerender(cardFor(bbb, { liftKey: 'press' }));
+    expect(check('supplemental set 1 (50kg)')).toHaveAttribute('aria-pressed', 'true');
+    expect(check('supplemental set 2 (50kg)')).toHaveAttribute('aria-pressed', 'false');
+    expect(check('warm-up set 1 (40kg)')).toHaveAttribute('aria-pressed', 'true');
+
+    // Both templates' back-off progress is stored side by side.
+    await waitFor(async () => {
+      const day = await workoutDayRepo.get(cycleId, 1, 'press');
+      expect(day?.progress['bbb:supplemental:1']?.done).toBe(true);
+      expect(day?.progress['fsl:supplemental:2']?.done).toBe(true);
+      expect(day?.progress['warmup:1']?.done).toBe(true);
+    });
+  });
+
+  it('clears the saved progress but keeps the timer once every main set is done and the session auto-saves', async () => {
+    const cycle = await seedCycle();
+    const cycleId = cycle.id as number;
+    const startedAt = new Date(2026, 8, 24, 18, 0).toISOString();
+    await workoutDayRepo.setTimes(cycleId, 1, 'press', { startedAt, endedAt: null });
+    render(cardFor(cycle, { liftKey: 'press' }));
+    await draftsLoaded();
+
+    // Saved as you go...
+    fireEvent.click(check('work set 1 (65kg)'));
+    await waitFor(async () => {
+      expect((await workoutDayRepo.get(cycleId, 1, 'press'))?.progress['main:1']?.done).toBe(true);
+    });
+
+    // ...until the last main set is done and the session saves.
+    fireEvent.click(check('work set 2 (75kg)'));
+    fireEvent.change(screen.getByLabelText('Reps done'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Mark work set 3 (85kg) AMRAP set done' }));
+
+    await waitFor(async () => {
+      const sessions = await sessionRepo.forCycle(cycleId);
+      expect(sessions.filter((s) => s.liftKey === 'press' && s.week === 1)).toHaveLength(1);
+      const day = await workoutDayRepo.get(cycleId, 1, 'press');
+      expect(day?.progress).toEqual({});
+      expect(day?.notes).toBe('');
+      expect(day?.startedAt).toBe(startedAt);
+      expect(day?.endedAt).toBeNull();
+    });
+    expect(await screen.findByText(/logged this week/i)).toBeTruthy();
+    const [session] = await sessionRepo.forCycle(cycleId);
+    expect(session.amrapReps).toBe(7);
+  });
+
+  it("keeps rendering a saved session's own logged sets after a template change, and never writes a draft for it", async () => {
+    const cycle = await seedCycle();
+    const cycleId = cycle.id as number;
+    const logged: Session = {
+      cycleId,
+      week: 1,
+      liftKey: 'press',
+      date: '2026-09-20T18:40:00.000Z',
+      status: 'done',
+      sets: [
+        { targetReps: 5, weight: 65, actualReps: 5, done: true, isAmrap: false, kind: 'main' },
+        { targetReps: 5, weight: 75, actualReps: 5, done: true, isAmrap: false, kind: 'main' },
+        { targetReps: 5, weight: 85, actualReps: 9, done: true, isAmrap: true, kind: 'main' },
+      ],
+      amrapReps: 9,
+      estimated1RM: 110,
+      rpe: null,
+      notes: '',
+    };
+    const session: Session = { ...logged, id: await sessionRepo.add(logged) };
+
+    const { rerender } = render(cardFor(cycle, { liftKey: 'press', session }));
+    expect(await screen.findByText(/logged this week/i)).toBeTruthy();
+    expect(screen.getAllByLabelText(/logged$/i)).toHaveLength(3);
+
+    rerender(cardFor({ ...cycle, template: 'bbb' }, { liftKey: 'press', session }));
+    await draftsLoaded();
+
+    expect(screen.getAllByLabelText(/logged$/i)).toHaveLength(3);
+    expect(screen.getByText('9 reps')).toBeTruthy();
+    expect(screen.queryAllByText('supplemental')).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: /^Mark / })).toHaveLength(0);
+
+    const [stored] = await sessionRepo.forCycle(cycleId);
+    expect(stored.sets).toEqual(logged.sets);
+    expect(await workoutDayRepo.get(cycleId, 1, 'press')).toBeUndefined();
+  });
+
+  // Home keeps every LiftCard mounted and just changes `week` when a week tab
+  // is tapped, so nothing belonging to the day just left may leak into the
+  // day now on screen — neither its display nor its stored row.
+  describe('switching weeks on the same card', () => {
+    it("never shows or stores a set checked on week 1 as week 2's, and restores it on week 1", async () => {
+      const cycle = await seedCycle();
+      const cycleId = cycle.id as number;
+      const { rerender } = render(cardFor(cycle, { liftKey: 'press', week: 1 }));
+      await draftsLoaded();
+
+      fireEvent.click(check('warm-up set 1 (40kg)'));
+      // Switch weeks immediately, before week 1's save lands (no await).
+      rerender(cardFor(cycle, { liftKey: 'press', week: 2 }));
+
+      // Once week 1's save has landed (and with it any continuation of it)
+      // and week 2's own draft has loaded, week 2's view is final.
+      await waitFor(async () => {
+        expect((await workoutDayRepo.get(cycleId, 1, 'press'))?.progress['warmup:1']?.done).toBe(true);
+      });
+      await draftsLoaded();
+
+      expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
+      expect((await workoutDayRepo.get(cycleId, 2, 'press'))?.progress['warmup:1']).toBeUndefined();
+
+      rerender(cardFor(cycle, { liftKey: 'press', week: 1 }));
+      await waitFor(() => expect(check('warm-up set 1 (40kg)')).toHaveAttribute('aria-pressed', 'true'));
+    });
+
+    it("never applies week 1's saved draft to week 2 when its load lands after the switch", async () => {
+      const cycle = await seedCycle();
+      const cycleId = cycle.id as number;
+      await workoutDayRepo.saveProgress(
+        cycleId,
+        1,
+        'press',
+        { 'warmup:1': { done: true, actualReps: null } },
+        'week one note',
+      );
+
+      const { rerender } = render(cardFor(cycle, { liftKey: 'press', week: 1 }));
+      // Switch before week 1's draft has loaded.
+      rerender(cardFor(cycle, { liftKey: 'press', week: 2 }));
+      await draftsLoaded();
+
+      expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
+      expect(screen.getByRole('button', { name: '+ Add note' })).toBeTruthy();
+
+      rerender(cardFor(cycle, { liftKey: 'press', week: 1 }));
+      await waitFor(() => expect(check('warm-up set 1 (40kg)')).toHaveAttribute('aria-pressed', 'true'));
+      expect(screen.getByRole('button', { name: 'week one note' })).toBeTruthy();
+    });
+
+    it("finishing week 1 then switching before its session lands: week 2 stays interactive and week 1's draft is still cleared", async () => {
+      const cycle = await seedCycle();
+      const cycleId = cycle.id as number;
+      // A parent-provided `session` (as Home passes it): not logged yet.
+      const { rerender } = render(cardFor(cycle, { liftKey: 'press', week: 1, session: null }));
+      await draftsLoaded();
+
+      fireEvent.click(check('work set 1 (65kg)'));
+      fireEvent.click(check('work set 2 (75kg)'));
+      fireEvent.click(screen.getByRole('button', { name: 'Mark work set 3 (85kg) AMRAP set done' }));
+      // The session auto-save is now in flight; switch before it lands.
+      rerender(cardFor(cycle, { liftKey: 'press', week: 2, session: null }));
+
+      await waitFor(async () => {
+        const sessions = await sessionRepo.forCycle(cycleId);
+        expect(sessions.filter((s) => s.liftKey === 'press' && s.week === 1)).toHaveLength(1);
+        expect((await workoutDayRepo.get(cycleId, 1, 'press'))?.progress).toEqual({});
+      });
+      await draftsLoaded();
+
+      expect(screen.queryByText(/logged this week/i)).toBeNull();
+      expect(check('work set 1 (70kg)')).toHaveAttribute('aria-pressed', 'false');
+      expect((await workoutDayRepo.get(cycleId, 2, 'press'))?.progress ?? {}).toEqual({});
+    });
+  });
+
+  it('saves both of two taps that land before the card re-renders', async () => {
+    const cycle = await seedCycle();
+    const cycleId = cycle.id as number;
+    render(cardFor(cycle, { liftKey: 'press' }));
+    await draftsLoaded();
+
+    const warmup1 = check('warm-up set 1 (40kg)');
+    const warmup2 = check('warm-up set 2 (50kg)');
+    // One act batch: no re-render between the taps, so the second tap's
+    // handler is the same (first-render) closure as the first's.
+    act(() => {
+      fireEvent.click(warmup1);
+      fireEvent.click(warmup2);
+    });
+
+    expect(check('warm-up set 1 (40kg)')).toHaveAttribute('aria-pressed', 'true');
+    expect(check('warm-up set 2 (50kg)')).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(async () => {
+      const day = await workoutDayRepo.get(cycleId, 1, 'press');
+      expect(day?.progress['warmup:2']?.done).toBe(true);
+      expect(day?.progress['warmup:1']?.done).toBe(true);
+    });
   });
 });

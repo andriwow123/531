@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { buildWorkout, computePlates, estimate1RM } from '../../domain';
-import type { LiftKey, SetKind, Unit, WeekNumber, WorkingSet } from '../../domain';
-import { cycleRepo, sessionRepo } from '../../data/repositories';
-import type { Cycle, LoggedSet, Session } from '../../data/repositories';
+import { buildWorkout, computePlates, estimate1RM, workoutRowKey } from '../../domain';
+import type { LiftKey, SetKind, TemplateKey, Unit, WeekNumber, WorkingSet } from '../../domain';
+import { cycleRepo, sessionRepo, workoutDayRepo } from '../../data/repositories';
+import type { Cycle, LoggedSet, Session, WorkoutDay } from '../../data/repositories';
 import type { SettingsState } from '../../settings/schema';
 import { resolveDisplay } from '../../settings/display';
 import ExerciseDemo from './ExerciseDemo';
@@ -56,13 +56,53 @@ interface RowState {
   actualReps: number;
   /** 1-based position of this set within its own kind (e.g. 2nd warm-up). */
   kindIndex: number;
+  /** This row's key in the day's saved progress (`workoutRowKey`). */
+  progressKey: string;
 }
 
-function withKindIndex(sets: WorkingSet[]): RowState[] {
+function withKindIndex(sets: WorkingSet[], template: TemplateKey): RowState[] {
   const counts: Record<SetKind, number> = { warmup: 0, main: 0, supplemental: 0 };
   return sets.map((set) => {
     counts[set.kind] += 1;
-    return { set, done: false, actualReps: set.reps, kindIndex: counts[set.kind] };
+    const kindIndex = counts[set.kind];
+    return {
+      set,
+      done: false,
+      actualReps: set.reps,
+      kindIndex,
+      progressKey: workoutRowKey(set.kind, kindIndex, template),
+    };
+  });
+}
+
+/** A day's in-progress (not yet logged) sets and note, as saved on its `WorkoutDay`. */
+interface Draft {
+  /** The day this draft belongs to (see `dayKeyOf`). */
+  dayKey: string;
+  progress: WorkoutDay['progress'];
+  notes: string;
+}
+
+function dayKeyOf(cycleId: number | undefined, week: WeekNumber, liftKey: LiftKey): string {
+  return `${cycleId ?? 'x'}:${week}:${liftKey}`;
+}
+
+/** Each row's saveable state. `actualReps` stays `null` while it matches the
+ *  prescription, so a restore follows a changed prescription (e.g. 5s PRO
+ *  switched on) instead of pinning the old default. */
+function progressOf(rows: RowState[]): WorkoutDay['progress'] {
+  const progress: WorkoutDay['progress'] = {};
+  for (const row of rows) {
+    progress[row.progressKey] = { done: row.done, actualReps: row.actualReps === row.set.reps ? null : row.actualReps };
+  }
+  return progress;
+}
+
+/** Freshly built rows with a draft's saved progress applied, matched by row key. */
+function restoreProgress(rows: RowState[], progress: WorkoutDay['progress']): RowState[] {
+  return rows.map((row) => {
+    const saved = progress[row.progressKey];
+    return saved ? { ...row, done: saved.done, actualReps: saved.actualReps ?? row.set.reps } : row;
   });
 }
 
@@ -111,6 +151,29 @@ export default function LiftCard({
   const [notes, setNotes] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
 
+  // The workout day this render is for. Home keeps every LiftCard mounted and
+  // just changes `week` when a week tab is tapped, so anything that finishes
+  // later (a draft load, a save) must check it is still for the day on screen
+  // before touching this card's state. The ref mirrors the latest value for
+  // those late continuations (same pattern as WorkoutTimer).
+  const dayKey = dayKeyOf(cycle.id, week, liftKey);
+  const identityRef = useRef(dayKey);
+  identityRef.current = dayKey;
+
+  // The day's in-progress draft, once loaded from its WorkoutDay (null until
+  // then). It only ever describes the day on screen: leaving a day drops it
+  // right here, so coming back always restores from what was stored rather
+  // than from a copy that may have missed a save's clear.
+  const [draft, setDraft] = useState<Draft | null>(null);
+  if (draft !== null && draft.dayKey !== dayKey) setDraft(null);
+  const draftReady = draft !== null && draft.dayKey === dayKey;
+
+  // Latest draft and rows for the event handlers, updated synchronously on
+  // every change so a second tap that lands before a re-render still builds
+  // on the first (a handler's own `rows`/`draft` would be one tap behind).
+  const draftRef = useRef<Draft | null>(null);
+  const rowsRef = useRef<RowState[]>([]);
+
   // Seeded from the `session` prop when a parent already resolved it, so a
   // parent-provided session renders read-only on the very first commit (no
   // interactive -> read-only flash). `null` (no prop) falls back to the
@@ -129,26 +192,29 @@ export default function LiftCard({
   const [tmInput, setTmInput] = useState('');
 
   const showWarmups = settings.template.warmups && display.warmups;
-  const workoutKey = `${liftKey}:${week}:${cycle.id ?? 'x'}:${cycle.tm[liftKey]}:${showWarmups}:${cycle.template}:${cycle.fivesPro}:${roundingIncrement}`;
+  // `draftReady` is part of the key, so the draft's arrival rebuilds the list
+  // with the saved progress applied.
+  const workoutKey = `${liftKey}:${week}:${cycle.id ?? 'x'}:${cycle.tm[liftKey]}:${showWarmups}:${cycle.template}:${cycle.fivesPro}:${roundingIncrement}:${draftReady}`;
   if (workoutKey !== rowsForRef) {
-    setRows(
-      withKindIndex(
-        buildWorkout({
-          tm: cycle.tm[liftKey],
-          week,
-          template: cycle.template,
-          fivesPro: cycle.fivesPro,
-          warmups: showWarmups,
-          roundingIncrement,
-        }),
-      ),
+    const built = withKindIndex(
+      buildWorkout({
+        tm: cycle.tm[liftKey],
+        week,
+        template: cycle.template,
+        fivesPro: cycle.fivesPro,
+        warmups: showWarmups,
+        roundingIncrement,
+      }),
+      cycle.template,
     );
+    setRows(draftReady ? restoreProgress(built, draft.progress) : built);
     setRowsForRef(workoutKey);
-    setNotes('');
+    setNotes(draftReady ? draft.notes : '');
     setNoteOpen(false);
     setSaveError(false);
     setEditingTm(false);
   }
+  rowsRef.current = rows;
 
   useEffect(() => {
     let cancelled = false;
@@ -180,7 +246,35 @@ export default function LiftCard({
     };
   }, [cycle.id, liftKey, week, session]);
 
+  // Loads the day's saved draft on mount and whenever the day changes. The
+  // result is tagged with the day it was read for, and a load for a day the
+  // card has already left is dropped (cancelled) rather than applied.
+  useEffect(() => {
+    if (cycle.id == null) return;
+    let cancelled = false;
+    const loadingFor = dayKeyOf(cycle.id, week, liftKey);
+    workoutDayRepo
+      .get(cycle.id, week, liftKey)
+      .then((day) => {
+        if (cancelled) return;
+        const loaded: Draft = { dayKey: loadingFor, progress: day?.progress ?? {}, notes: day?.notes ?? '' };
+        draftRef.current = loaded;
+        setDraft(loaded);
+      })
+      .catch(() => {
+        // Unreadable: the draft stays unloaded, so this visit's changes just
+        // aren't saved as you go (never overwrite the stored draft blind).
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cycle.id, week, liftKey]);
+
   async function save() {
+    // The day being logged, fixed before the await: by the time the write
+    // lands the card may be showing another week.
+    const cycleId = cycle.id as number;
+    const savingFor = dayKey;
     const sets: LoggedSet[] = rows.map((r) => ({
       targetReps: r.set.reps,
       weight: r.set.weight,
@@ -195,7 +289,7 @@ export default function LiftCard({
     const estimated1RM = amrapRow && amrapReps != null ? estimate1RM(amrapRow.set.weight, amrapReps) : null;
 
     const newSession: Session = {
-      cycleId: cycle.id as number,
+      cycleId,
       week,
       liftKey,
       date: new Date().toISOString(),
@@ -208,18 +302,33 @@ export default function LiftCard({
     };
 
     const id = await sessionRepo.add(newSession);
-    setExistingSession({ ...newSession, id });
+    // The session now holds everything the draft did: clear the logged day's
+    // draft (its workout timer is kept) — that day's, even if the card has
+    // moved on. Local state is only touched if it is still on that day.
+    workoutDayRepo.clearProgress(cycleId, week, liftKey).catch(() => {
+      // Harmless if it fails: a logged day renders from its session.
+    });
+    if (identityRef.current === savingFor) {
+      draftRef.current = null;
+      setDraft(null);
+      setExistingSession({ ...newSession, id });
+    }
     onLogged?.();
   }
 
   // Guarded save: on failure (e.g. IndexedDB quota / private mode) reset the
   // in-flight guard and surface a retry affordance rather than silently
-  // stranding a "done" workout with nothing persisted.
+  // stranding a "done" workout with nothing persisted. A failure for a day
+  // the card has since left touches nothing here: the switch already reset
+  // the guard for the day on screen, and the failed day's saved draft still
+  // has its checks, so returning to it retries the save.
   function triggerSave() {
     if (savingRef.current) return;
     savingRef.current = true;
     setSaveError(false);
+    const savingFor = dayKey;
     save().catch(() => {
+      if (identityRef.current !== savingFor) return;
       savingRef.current = false;
       setSaveError(true);
     });
@@ -235,12 +344,53 @@ export default function LiftCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, existingSession]);
 
+  /**
+   * Saves the day's draft with `change` applied, as you go. Only once this
+   * day's stored draft has loaded and the rows on screen were rebuilt from it
+   * (`draftReady` — before that, writing would replace the stored progress
+   * with a partial one) and while the lift is still unlogged. Updates the
+   * local draft synchronously, then writes it with this day's ids, fixed now,
+   * and touches no state afterward. Each write carries the whole draft and
+   * the repo's upserts are atomic and applied in call order, so the last
+   * change always wins and a failed write heals on the next one.
+   */
+  function saveDraft(change: { progress?: WorkoutDay['progress']; notes?: string }) {
+    const current = draftRef.current;
+    if (!draftReady || cycle.id == null || existingSession !== null) return;
+    if (current === null || current.dayKey !== dayKey) return;
+    const next: Draft = {
+      dayKey,
+      // Spread over the saved progress so rows not on screen right now (e.g.
+      // BBB back-off sets while on FSL) keep theirs.
+      progress: change.progress ? { ...current.progress, ...change.progress } : current.progress,
+      notes: change.notes ?? current.notes,
+    };
+    draftRef.current = next;
+    setDraft(next);
+    workoutDayRepo.saveProgress(cycle.id, week, liftKey, next.progress, next.notes).catch(() => {
+      // Best effort: the rows on screen are unaffected, and the next change
+      // writes the whole draft again.
+    });
+  }
+
+  function updateRows(change: (current: RowState[]) => RowState[]) {
+    const next = change(rowsRef.current);
+    rowsRef.current = next;
+    setRows(next);
+    saveDraft({ progress: progressOf(next) });
+  }
+
   function toggleDone(index: number) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, done: !r.done } : r)));
+    updateRows((current) => current.map((r, i) => (i === index ? { ...r, done: !r.done } : r)));
   }
 
   function changeReps(index: number, reps: number) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, actualReps: reps } : r)));
+    updateRows((current) => current.map((r, i) => (i === index ? { ...r, actualReps: reps } : r)));
+  }
+
+  function changeNotes(value: string) {
+    setNotes(value);
+    saveDraft({ notes: value });
   }
 
   function openTmEditor() {
@@ -573,7 +723,7 @@ export default function LiftCard({
                 id={`lift-note-${liftKey}`}
                 autoFocus
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => changeNotes(e.target.value)}
                 rows={3}
                 className="w-full rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
               />
