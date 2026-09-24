@@ -7,6 +7,7 @@ import type { SettingsState } from '../../settings/schema';
 import { resolveDisplay } from '../../settings/display';
 import ExerciseDemo from './ExerciseDemo';
 import SupportingLifts from './SupportingLifts';
+import WorkoutTimer from './WorkoutTimer';
 import Chevron from './Chevron';
 
 export interface LiftCardProps {
@@ -396,6 +397,12 @@ export default function LiftCard({
           )}
         </div>
       </header>
+
+      {cycle.id != null && (
+        <div className="mb-3">
+          <WorkoutTimer cycleId={cycle.id} week={week} liftKey={liftKey} sessionSavedAt={existingSession?.date} />
+        </div>
+      )}
 
       {existingSession != null && (
         <div className="flex items-center justify-between gap-2 rounded-[var(--r-card)] bg-[var(--surface-2)] px-3 py-2.5 text-[13px] font-bold text-[var(--muted)]">
