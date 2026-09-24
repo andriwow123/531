@@ -33,6 +33,16 @@ export interface SupportingDone {
   reps: number | null;
   done: boolean;
 }
+export interface WorkoutDay {
+  id?: number;
+  cycleId: number;
+  week: WeekNumber;
+  liftKey: LiftKey;
+  startedAt: string | null;
+  endedAt: string | null;
+  progress: Record<string, { done: boolean; actualReps: number | null }>;
+  notes: string;
+}
 
 export const profileRepo = {
   get: (): Promise<Profile | undefined> => db.profile.get('me'),
@@ -154,4 +164,31 @@ export const supportingDoneRepo = {
   // missing `done` is coerced to done since those rows represent completed work.
   allLogged: (): Promise<SupportingDone[]> =>
     db.supportingDone.filter((d) => (d.weight !== null || d.reps !== null) && (d.done ?? true)).toArray(),
+};
+
+function findDay(cycleId: number, week: WeekNumber, liftKey: LiftKey): Promise<WorkoutDay | undefined> {
+  return db.workoutDays.where('[cycleId+week+liftKey]').equals([cycleId, week, liftKey]).first();
+}
+
+async function upsertDay(cycleId: number, week: WeekNumber, liftKey: LiftKey, patch: Partial<WorkoutDay>): Promise<void> {
+  const existing = await findDay(cycleId, week, liftKey);
+  if (existing?.id !== undefined) {
+    await db.workoutDays.update(existing.id, patch);
+  } else {
+    await db.workoutDays.add({ cycleId, week, liftKey, startedAt: null, endedAt: null, progress: {}, notes: '', ...patch });
+  }
+}
+
+export const workoutDayRepo = {
+  get: (cycleId: number, week: WeekNumber, liftKey: LiftKey) => findDay(cycleId, week, liftKey),
+  forCycle: (cycleId: number): Promise<WorkoutDay[]> => db.workoutDays.where('cycleId').equals(cycleId).toArray(),
+  all: (): Promise<WorkoutDay[]> => db.workoutDays.toArray(),
+  setTimes: (cycleId: number, week: WeekNumber, liftKey: LiftKey, times: { startedAt: string | null; endedAt: string | null }) =>
+    upsertDay(cycleId, week, liftKey, times),
+  saveProgress: (cycleId: number, week: WeekNumber, liftKey: LiftKey, progress: WorkoutDay['progress'], notes: string) =>
+    upsertDay(cycleId, week, liftKey, { progress, notes }),
+  clearProgress: async (cycleId: number, week: WeekNumber, liftKey: LiftKey): Promise<void> => {
+    const existing = await findDay(cycleId, week, liftKey);
+    if (existing?.id !== undefined) await db.workoutDays.update(existing.id, { progress: {}, notes: '' });
+  },
 };

@@ -50,9 +50,11 @@ export function parseBackup(text: string): BackupFile {
   return candidate as unknown as BackupFile;
 }
 
-/** Full restore/replace: every table present in the backup replaces the
- *  current table's contents (clear + bulkPut, preserving explicit ids). Runs
- *  in a single read-write transaction across all tables so it's all-or-nothing. */
+/** Full restore: every table is cleared, then each table present in the
+ *  backup is restored (bulkPut, preserving explicit ids). A table absent from
+ *  the backup is left empty rather than untouched, so restoring an older
+ *  backup can't leave stale rows behind. Runs in a single read-write
+ *  transaction across all tables so it's all-or-nothing. */
 export async function importBackup(file: BackupFile): Promise<void> {
   if (file.app !== '531' || file.version !== 1) {
     throw new Error('That file is not a valid 5/3/1 backup.');
@@ -60,11 +62,9 @@ export async function importBackup(file: BackupFile): Promise<void> {
 
   await db.transaction('rw', db.tables, async () => {
     for (const table of db.tables) {
+      await table.clear();
       const rows = file.data[table.name];
-      if (Array.isArray(rows)) {
-        await table.clear();
-        await table.bulkPut(rows as unknown[]);
-      }
+      if (Array.isArray(rows)) await table.bulkPut(rows as unknown[]);
     }
   });
 }

@@ -10,6 +10,7 @@ import type {
   CustomExercise,
   HiddenSupporting,
   SupportingDone,
+  WorkoutDay,
 } from './repositories';
 
 export class AppDB extends Dexie {
@@ -23,6 +24,7 @@ export class AppDB extends Dexie {
   customExercises!: Table<CustomExercise, number>;
   supportingDone!: Table<SupportingDone, number>;
   hiddenSupporting!: Table<HiddenSupporting, number>;
+  workoutDays!: Table<WorkoutDay, number>;
   constructor() {
     super('fivethreeone');
     this.version(1).stores({
@@ -35,6 +37,7 @@ export class AppDB extends Dexie {
     this.version(3).stores({ bodyweight: '++id, date' });
     this.version(4).stores({ assistance: '++id, date', customExercises: '++id, category' });
     this.version(5).stores({ supportingDone: '++id, date', hiddenSupporting: '++id, category' });
+    this.version(6).stores({ workoutDays: '++id, [cycleId+week+liftKey], cycleId' });
   }
 }
 export const db = new AppDB();

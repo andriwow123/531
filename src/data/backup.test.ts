@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from './db';
-import { profileRepo, bodyweightRepo, cycleRepo } from './repositories';
+import { profileRepo, bodyweightRepo, cycleRepo, workoutDayRepo } from './repositories';
 import type { Cycle } from './repositories';
 import { exportBackup, parseBackup, importBackup } from './backup';
 import type { BackupFile } from './backup';
@@ -48,6 +48,12 @@ describe('exportBackup', () => {
     for (const table of db.tables) {
       expect(Array.isArray(backup.data[table.name])).toBe(true);
     }
+  });
+
+  it('exports workoutDays', async () => {
+    await workoutDayRepo.setTimes(1, 1, 'press', { startedAt: 'S', endedAt: null });
+    const file = await exportBackup();
+    expect(file.data.workoutDays).toHaveLength(1);
   });
 });
 
@@ -136,5 +142,11 @@ describe('importBackup', () => {
     const all = await bodyweightRepo.all();
     expect(all).toHaveLength(1);
     expect(all[0]).toMatchObject({ date: '2026-02-01', weight: 82.5 });
+  });
+
+  it('restore is a full replace: a backup without workoutDays clears them', async () => {
+    await workoutDayRepo.setTimes(1, 1, 'press', { startedAt: 'S', endedAt: null });
+    await importBackup({ app: '531', version: 1, exportedAt: 'x', data: { bodyweight: [] } });
+    expect(await workoutDayRepo.all()).toEqual([]);
   });
 });

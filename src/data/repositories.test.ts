@@ -11,6 +11,7 @@ import {
   customExerciseRepo,
   hiddenSupportingRepo,
   supportingDoneRepo,
+  workoutDayRepo,
 } from './repositories';
 import type { Cycle, Session } from './repositories';
 import { defaultSettings } from '../settings/schema';
@@ -248,5 +249,23 @@ describe('supportingDoneRepo select/setDone/deselect/lastLogged', () => {
 
     const logged = await supportingDoneRepo.allLogged();
     expect(logged.map((r) => r.name).sort()).toEqual(['B', 'C']);
+  });
+});
+describe('workoutDayRepo', () => {
+  it('upserts times and progress on one row per cycle/week/lift', async () => {
+    await workoutDayRepo.setTimes(1, 2, 'press', { startedAt: 'S', endedAt: null });
+    await workoutDayRepo.saveProgress(1, 2, 'press', { 'main:1': { done: true, actualReps: 5 } }, 'felt good');
+    const rows = await workoutDayRepo.forCycle(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ week: 2, liftKey: 'press', startedAt: 'S', endedAt: null, notes: 'felt good' });
+    expect(rows[0].progress['main:1']).toEqual({ done: true, actualReps: 5 });
+  });
+  it('clearProgress empties progress and notes but keeps times, and never creates a row', async () => {
+    await workoutDayRepo.setTimes(1, 1, 'squat', { startedAt: 'S', endedAt: 'E' });
+    await workoutDayRepo.saveProgress(1, 1, 'squat', { 'main:1': { done: true, actualReps: 5 } }, 'n');
+    await workoutDayRepo.clearProgress(1, 1, 'squat');
+    expect(await workoutDayRepo.get(1, 1, 'squat')).toMatchObject({ startedAt: 'S', endedAt: 'E', progress: {}, notes: '' });
+    await workoutDayRepo.clearProgress(9, 1, 'bench');
+    expect(await workoutDayRepo.get(9, 1, 'bench')).toBeUndefined();
   });
 });
