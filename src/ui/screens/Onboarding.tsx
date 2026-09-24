@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { computeTrainingMax } from '../../domain';
+import { computeTrainingMax, defaultRoundingFor } from '../../domain';
 import type { LiftKey, Unit } from '../../domain';
 import { profileRepo, liftRepo, cycleRepo } from '../../data/repositories';
 import type { Lift } from '../../data/repositories';
@@ -65,7 +65,15 @@ export default function Onboarding() {
       // Entered value IS the training max — round to the increment, no % reduction.
       const trainingMax = computeTrainingMax(enteredTm, 1, roundingIncrement);
       tm[key] = trainingMax;
-      return { key, name: meta.name, category: meta.category, oneRm: trainingMax, trainingMax, increment };
+      return {
+        key,
+        name: meta.name,
+        category: meta.category,
+        oneRm: trainingMax,
+        trainingMax,
+        increment,
+        roundingIncrement: defaultRoundingFor(meta.category, units),
+      };
     });
 
     await Promise.all([

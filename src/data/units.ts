@@ -1,6 +1,6 @@
 import { db } from './db';
 import type { Unit, LiftCategory } from '../domain';
-import { roundToIncrement } from '../domain';
+import { roundToIncrement, convertRoundingStep } from '../domain';
 
 /** Per-category increment for a given target unit (upper: press/bench, lower: squat/deadlift). */
 function liftIncrement(category: LiftCategory, to: Unit): number {
@@ -36,6 +36,9 @@ export async function convertUnits(to: Unit): Promise<void> {
           trainingMax: roundToIncrement(l.trainingMax * factor, target),
           oneRm: roundToIncrement(l.oneRm * factor, target),
           increment: liftIncrement(l.category, to),
+          ...(l.roundingIncrement !== undefined
+            ? { roundingIncrement: convertRoundingStep(l.roundingIncrement, profile.units, to, l.category) }
+            : {}),
         })),
       );
 

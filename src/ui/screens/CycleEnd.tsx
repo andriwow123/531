@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { suggestProgression, estimate1RM, LIFT_ORDER } from '../../domain';
+import { suggestProgression, estimate1RM, LIFT_ORDER, effectiveRounding } from '../../domain';
 import type { LiftKey, ProgressionDecision } from '../../domain';
 import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
 import type { Cycle, Lift, Session, LoggedSet } from '../../data/repositories';
@@ -26,6 +26,7 @@ interface LiftRow {
   liftName: string;
   currentTm: number;
   increment: number;
+  roundingIncrement: number;
   topSetCompleted: boolean;
   amrapWeight: number | null;
   amrapReps: number | null;
@@ -37,7 +38,6 @@ interface LiftRow {
 
 interface LoadedCycleEnd {
   cycle: Cycle;
-  roundingIncrement: number;
   rows: LiftRow[];
 }
 
@@ -105,13 +105,15 @@ export default function CycleEnd() {
         const rpe = session?.rpe ?? DEFAULT_RPE;
         const currentTm = cycle.tm[liftKey];
         const increment = lift?.increment ?? 0;
-        const suggestion = suggestFor({ topSetCompleted, currentTm, increment }, rpe, profile.roundingIncrement);
+        const roundingIncrement = effectiveRounding(lift?.roundingIncrement, profile.roundingIncrement);
+        const suggestion = suggestFor({ topSetCompleted, currentTm, increment }, rpe, roundingIncrement);
 
         return {
           liftKey,
           liftName: lift?.name ?? LIFT_NAMES[liftKey],
           currentTm,
           increment,
+          roundingIncrement,
           topSetCompleted,
           amrapWeight: amrapWeightFor(session),
           amrapReps: session?.amrapReps ?? null,
@@ -123,7 +125,7 @@ export default function CycleEnd() {
       });
 
       if (!cancelled) {
-        setLoaded({ cycle, roundingIncrement: profile.roundingIncrement, rows });
+        setLoaded({ cycle, rows });
       }
     }
 
@@ -140,7 +142,7 @@ export default function CycleEnd() {
         ...prev,
         rows: prev.rows.map((row) => {
           if (row.liftKey !== liftKey) return row;
-          const suggestion = suggestFor(row, rpe, prev.roundingIncrement);
+          const suggestion = suggestFor(row, rpe, row.roundingIncrement);
           return { ...row, rpe, decision: suggestion.decision, newTm: suggestion.newTm };
         }),
       };

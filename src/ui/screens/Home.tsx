@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { UIEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { nextUp, LIFT_ORDER, orderedLifts, moveItem } from '../../domain';
+import { nextUp, LIFT_ORDER, orderedLifts, moveItem, effectiveRounding } from '../../domain';
 import type { LiftKey, Unit, WeekNumber } from '../../domain';
-import { cycleRepo, profileRepo, sessionRepo } from '../../data/repositories';
-import type { Cycle, Session } from '../../data/repositories';
+import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
+import type { Cycle, Lift, Session } from '../../data/repositories';
 import { useSettings } from '../settings/SettingsContext';
 import { useRestTimer } from '../hooks/useRestTimer';
 import LiftCard from '../components/LiftCard';
@@ -24,6 +24,7 @@ interface LoadedData {
   cycle: Cycle;
   profile: { units: Unit; roundingIncrement: number };
   sessions: Session[];
+  lifts: Lift[];
 }
 
 /** mm:ss, zero-padded seconds. */
@@ -98,7 +99,7 @@ export default function Home() {
     let cancelled = false;
 
     async function load() {
-      const [cycle, profile] = await Promise.all([cycleRepo.active(), profileRepo.get()]);
+      const [cycle, profile, lifts] = await Promise.all([cycleRepo.active(), profileRepo.get(), liftRepo.all()]);
       if (!cycle || cycle.id == null || !profile) {
         if (!cancelled) setData(null);
         return;
@@ -114,7 +115,7 @@ export default function Home() {
       const logged = sessions
         .filter((s) => s.status === 'done')
         .map((s) => ({ liftKey: s.liftKey, week: s.week }));
-      setData({ cycle, profile, sessions });
+      setData({ cycle, profile, sessions, lifts });
       const next = nextUp(logged);
       setSelectedWeek(next.week);
       // Order-independent (nextUp only ever reasons in LIFT_ORDER space) —
@@ -293,7 +294,10 @@ export default function Home() {
                 week={selectedWeek}
                 cycle={data.cycle}
                 unit={unit}
-                roundingIncrement={data.profile.roundingIncrement}
+                roundingIncrement={effectiveRounding(
+                  data.lifts.find((l) => l.key === key)?.roundingIncrement,
+                  data.profile.roundingIncrement,
+                )}
                 dayNumber={index + 1}
                 settings={settings}
                 session={

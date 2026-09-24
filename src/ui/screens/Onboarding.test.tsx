@@ -78,4 +78,25 @@ describe('Onboarding', () => {
     expect(await liftRepo.all()).toHaveLength(0);
     expect(await cycleRepo.active()).toBeFalsy();
   });
+
+  it("sets each lift's default roundingIncrement by category (kg): upper 2.5, lower 5, without changing entered-TM rounding", async () => {
+    render(
+      <MemoryRouter>
+        <Onboarding />
+      </MemoryRouter>,
+    );
+    for (const key of ['press', 'bench', 'squat', 'deadlift']) {
+      fireEvent.change(screen.getByLabelText(new RegExp(key, 'i')), { target: { value: '100' } });
+    }
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    await new Promise((r) => setTimeout(r, 0));
+
+    const lifts = await liftRepo.all();
+    expect(lifts.find((l) => l.key === 'press')?.roundingIncrement).toBe(2.5);
+    expect(lifts.find((l) => l.key === 'bench')?.roundingIncrement).toBe(2.5);
+    expect(lifts.find((l) => l.key === 'squat')?.roundingIncrement).toBe(5);
+    expect(lifts.find((l) => l.key === 'deadlift')?.roundingIncrement).toBe(5);
+    // Entered TM rounding is unaffected — still uses the profile's 2.5 kg increment.
+    expect(lifts.every((l) => l.trainingMax === 100)).toBe(true);
+  });
 });

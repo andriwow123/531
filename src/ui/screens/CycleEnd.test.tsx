@@ -206,3 +206,57 @@ describe('CycleEnd', () => {
     });
   });
 });
+
+describe('CycleEnd — per-lift rounding for progression suggestions', () => {
+  it("uses a lift's own roundingIncrement for the suggested new TM, including after an RPE change, instead of the profile fallback", async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    await liftRepo.bulkSave([
+      { key: 'press', name: 'Overhead Press', category: 'upper', oneRm: 100, trainingMax: 100, increment: 2.5 },
+      { key: 'bench', name: 'Bench Press', category: 'upper', oneRm: 100, trainingMax: 100, increment: 2.5 },
+      {
+        key: 'squat',
+        name: 'Squat',
+        category: 'lower',
+        oneRm: 142.5,
+        trainingMax: 142.5,
+        increment: 5,
+        roundingIncrement: 5,
+      },
+      { key: 'deadlift', name: 'Deadlift', category: 'lower', oneRm: 100, trainingMax: 100, increment: 5 },
+    ]);
+    const cycleId = await cycleRepo.add({
+      index: 1,
+      startedAt: '2026-01-01',
+      status: 'active',
+      template: 'base',
+      fivesPro: false,
+      tm: { press: 100, bench: 100, squat: 142.5, deadlift: 100 },
+    });
+    await sessionRepo.add({
+      cycleId,
+      week: 3,
+      liftKey: 'squat',
+      date: '2026-02-01',
+      status: 'done',
+      sets: [
+        { targetReps: 1, weight: 135, actualReps: 3, done: true, isAmrap: true, kind: 'main' },
+      ],
+      amrapReps: 3,
+      estimated1RM: null,
+      rpe: 8,
+      notes: '',
+    });
+
+    renderCycleEnd();
+    await screen.findByText('Squat');
+
+    // TM 142.5 + increment 5 = 147.5 → rounds to 150 at squat's own 5 kg
+    // roundingIncrement (the profile's 2.5 kg fallback would leave it at 147.5).
+    expect((screen.getByLabelText('New training max for Squat') as HTMLInputElement).value).toBe('150');
+
+    // Changing the RPE (still a bump-level RPE) re-suggests using the same
+    // per-lift rounding, not the profile-wide fallback.
+    fireEvent.change(screen.getByLabelText('RPE for Squat'), { target: { value: '7' } });
+    expect((screen.getByLabelText('New training max for Squat') as HTMLInputElement).value).toBe('150');
+  });
+});

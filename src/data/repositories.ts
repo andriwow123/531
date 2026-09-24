@@ -4,7 +4,16 @@ import { defaultSettings } from '../settings/schema';
 import type { SettingsState } from '../settings/schema';
 
 export interface Profile { id: 'me'; units: Unit; roundingIncrement: number; tmPercent: number; }
-export interface Lift { key: LiftKey; name: string; category: LiftCategory; oneRm: number; trainingMax: number; increment: number; }
+export interface Lift {
+  key: LiftKey;
+  name: string;
+  category: LiftCategory;
+  oneRm: number;
+  trainingMax: number;
+  increment: number;
+  /** Per-lift rounding for working sets; absent = use profile.roundingIncrement. */
+  roundingIncrement?: number;
+}
 export interface Cycle { id?: number; index: number; startedAt: string; status: 'active' | 'completed'; template: TemplateKey; fivesPro: boolean; tm: Record<LiftKey, number>; }
 export interface LoggedSet { targetReps: number; weight: number; actualReps: number | null; done: boolean; isAmrap: boolean; kind: SetKind; }
 export interface Session { id?: number; cycleId: number; week: WeekNumber; liftKey: LiftKey; date: string; status: 'planned' | 'done'; sets: LoggedSet[]; amrapReps: number | null; estimated1RM: number | null; rpe: number | null; notes: string; }

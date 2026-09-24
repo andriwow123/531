@@ -475,3 +475,42 @@ describe('Home — rest timer', () => {
     expect(await screen.findByRole('button', { name: 'Start' })).toBeTruthy();
   });
 });
+
+describe('Home — per-lift rounding for working sets', () => {
+  it("uses a lift's own roundingIncrement for its work-set weights, falling back to the profile's for lifts without one", async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    await liftRepo.bulkSave([
+      { key: 'press', name: 'Overhead Press', category: 'upper', oneRm: 100, trainingMax: 100, increment: 2.5 },
+      { key: 'bench', name: 'Bench Press', category: 'upper', oneRm: 103, trainingMax: 103, increment: 2.5 },
+      {
+        key: 'squat',
+        name: 'Squat',
+        category: 'lower',
+        oneRm: 142.5,
+        trainingMax: 142.5,
+        increment: 5,
+        roundingIncrement: 5,
+      },
+      { key: 'deadlift', name: 'Deadlift', category: 'lower', oneRm: 140, trainingMax: 140, increment: 5 },
+    ]);
+    await cycleRepo.add({
+      index: 1,
+      startedAt: '2026-01-01',
+      status: 'active',
+      template: 'base',
+      fivesPro: false,
+      tm: { press: 100, bench: 103, squat: 142.5, deadlift: 140 },
+    });
+
+    renderHome();
+    await waitForLoaded();
+
+    // Squat TM 142.5 × 65% = 92.625 → rounds to 95 at its own 5 kg
+    // roundingIncrement (the profile's 2.5 kg fallback would give 92.5).
+    expect(screen.getByRole('button', { name: 'Mark work set 1 (95kg) done' })).toBeTruthy();
+
+    // Bench has no per-lift roundingIncrement -> falls back to the profile's
+    // 2.5 kg. TM 103 × 65% = 66.95 → 67.5.
+    expect(screen.getByRole('button', { name: 'Mark work set 1 (67.5kg) done' })).toBeTruthy();
+  });
+});

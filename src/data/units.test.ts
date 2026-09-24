@@ -161,3 +161,41 @@ describe('convertUnits — assistance & supporting-lift weights', () => {
     expect(selectedDips?.reps).toBeNull();
   });
 });
+
+describe('convertUnits — per-lift roundingIncrement', () => {
+  it('maps a set roundingIncrement to the same-index step in the target unit, and leaves a lift without one still without one', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    await liftRepo.bulkSave([
+      {
+        key: 'press',
+        name: 'Overhead Press',
+        category: 'upper',
+        oneRm: 100,
+        trainingMax: 100,
+        increment: 2.5,
+        roundingIncrement: 1.25,
+      },
+      { key: 'bench', name: 'Bench Press', category: 'upper', oneRm: 100, trainingMax: 100, increment: 2.5 },
+      {
+        key: 'squat',
+        name: 'Squat',
+        category: 'lower',
+        oneRm: 140,
+        trainingMax: 140,
+        increment: 5,
+        roundingIncrement: 5,
+      },
+      { key: 'deadlift', name: 'Deadlift', category: 'lower', oneRm: 140, trainingMax: 140, increment: 5 },
+    ]);
+
+    await convertUnits('lb');
+
+    const lifts = await liftRepo.all();
+    // kg [1.25, 2.5, 5] <-> lb [2.5, 5, 10] by position.
+    expect(lifts.find((l) => l.key === 'squat')?.roundingIncrement).toBe(10);
+    expect(lifts.find((l) => l.key === 'press')?.roundingIncrement).toBe(2.5);
+    // No per-lift roundingIncrement before conversion -> still none after.
+    expect(lifts.find((l) => l.key === 'bench')?.roundingIncrement).toBeUndefined();
+    expect(lifts.find((l) => l.key === 'deadlift')?.roundingIncrement).toBeUndefined();
+  });
+});
