@@ -144,4 +144,75 @@ describe('WorkoutTimer', () => {
 
     expect(await screen.findByRole('button', { name: 'Start workout' })).toBeTruthy();
   });
+
+  // Home keeps every LiftCard (and its WorkoutTimer) mounted and just changes
+  // the `week` prop when the user taps a week tab — the timer never remounts.
+  // These guard against a stale in-flight write/read for the day you just
+  // left leaking into the day you switched to (display or the stored row).
+  describe('switching days mid-write', () => {
+    it('does not show a leaked running timer from the day you switched away from', async () => {
+      const clock = at(18, 0);
+      const { rerender } = render(<WorkoutTimer cycleId={1} week={1} liftKey="press" now={() => clock} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Start workout' }));
+      // Switch weeks immediately — before the week-1 write settles (no await).
+      rerender(<WorkoutTimer cycleId={1} week={2} liftKey="press" now={() => clock} />);
+
+      // Once week 1's write has landed in the DB, its (possibly stale)
+      // continuation has also already run — so the DOM state checked below
+      // is final, not a transient mid-race snapshot.
+      await waitFor(async () => {
+        const week1Day = await workoutDayRepo.get(1, 1, 'press');
+        expect(week1Day?.startedAt).toBe(clock.toISOString());
+      });
+
+      expect(await screen.findByRole('button', { name: 'Start workout' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'End workout' })).toBeNull();
+      expect(await workoutDayRepo.get(1, 2, 'press')).toBeUndefined();
+    });
+
+    it('starting the new day after such a switch writes its own row and leaves the old one untouched', async () => {
+      let clock = at(18, 0);
+      const { rerender } = render(<WorkoutTimer cycleId={1} week={1} liftKey="press" now={() => clock} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Start workout' }));
+      rerender(<WorkoutTimer cycleId={1} week={2} liftKey="press" now={() => clock} />);
+
+      await waitFor(async () => {
+        const week1Day = await workoutDayRepo.get(1, 1, 'press');
+        expect(week1Day?.startedAt).toBe(clock.toISOString());
+      });
+
+      clock = at(18, 5);
+      fireEvent.click(await screen.findByRole('button', { name: 'Start workout' }));
+
+      await waitFor(async () => {
+        const week2Day = await workoutDayRepo.get(1, 2, 'press');
+        expect(week2Day?.startedAt).toBe(clock.toISOString());
+      });
+
+      const week1Day = await workoutDayRepo.get(1, 1, 'press');
+      expect(week1Day?.startedAt).toBe(at(18, 0).toISOString());
+      expect(week1Day?.endedAt).toBeNull();
+    });
+
+    it('leaves edit mode (and its inputs/errors) behind when switching to a different day', async () => {
+      await workoutDayRepo.setTimes(1, 1, 'press', {
+        startedAt: at(18, 0).toISOString(),
+        endedAt: at(18, 52).toISOString(),
+      });
+      const clock = at(20, 0);
+      const { rerender } = render(<WorkoutTimer cycleId={1} week={1} liftKey="press" now={() => clock} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+      expect(screen.getByLabelText('Start time')).toBeTruthy();
+
+      rerender(<WorkoutTimer cycleId={1} week={2} liftKey="press" now={() => clock} />);
+
+      expect(await screen.findByRole('button', { name: 'Start workout' })).toBeTruthy();
+      expect(screen.queryByLabelText('Start time')).toBeNull();
+      expect(screen.queryByLabelText('End time')).toBeNull();
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   formatElapsed,
   formatWorkoutDuration,
@@ -60,14 +60,42 @@ export default function WorkoutTimer({
   const [error, setError] = useState<string | null>(null);
   const [, setTick] = useState(0);
 
-  // Load on mount and whenever the identity of the workout day changes;
-  // renders nothing (see the `times === null` check below) until this
-  // resolves, so a stale/wrong day is never shown mid-load.
-  useEffect(() => {
-    let cancelled = false;
+  // Identity of the workout day this render is for. Home keeps every
+  // LiftCard (and this timer) mounted and just changes the `week` prop when
+  // the user taps a week tab — the timer never remounts — so a write/read
+  // still in flight for the day just left must never touch the new day's
+  // displayed state or its stored row.
+  const dayId = `${cycleId}:${week}:${liftKey}`;
+
+  // Always holds the latest `dayId`, readable from inside an old (stale)
+  // async continuation's closure — unlike a plain variable or state, which
+  // that closure would only ever see as of whenever it was created. The
+  // unconditional assignment below just mirrors this render's own props into
+  // the ref every render; it never makes a decision from a stale read, so
+  // it's safe even under StrictMode's double-render.
+  const identityRef = useRef(dayId);
+  identityRef.current = dayId;
+
+  // The identity `times`/`mode`/the open editor's inputs currently reflect.
+  // When it no longer matches `dayId` (a switch just happened), reset
+  // synchronously right here during render — not in the effect below, which
+  // only runs after this commits/paints — so the previous day's timer or
+  // editor is never shown, not even for a frame.
+  const [loadedFor, setLoadedFor] = useState(dayId);
+  if (loadedFor !== dayId) {
+    setLoadedFor(dayId);
     setTimesState(null);
     setMode('idle');
     setError(null);
+    setFinishValue('');
+    setEditStart('');
+    setEditEnd('');
+  }
+
+  // Loads on mount and whenever the identity changes (the reset above already
+  // hid the previous day synchronously; this fetches the new one).
+  useEffect(() => {
+    let cancelled = false;
     workoutDayRepo.get(cycleId, week, liftKey).then((day) => {
       if (cancelled) return;
       setTimesState({ startedAt: day?.startedAt ?? null, endedAt: day?.endedAt ?? null });
@@ -90,9 +118,16 @@ export default function WorkoutTimer({
 
   if (times === null) return null;
 
-  async function persist(next: Times) {
+  // Returns whether the write was applied to the currently-displayed day
+  // (`false` means a different day is showing now — a switch happened while
+  // this write was in flight, so it was discarded rather than clobbering
+  // whatever the new day's own load already put on screen).
+  async function persist(next: Times): Promise<boolean> {
+    const idAtCall = dayId;
     await workoutDayRepo.setTimes(cycleId, week, liftKey, next);
+    if (identityRef.current !== idAtCall) return false;
     setTimesState(next);
+    return true;
   }
 
   async function startWorkout() {
@@ -101,7 +136,8 @@ export default function WorkoutTimer({
 
   async function endWorkout() {
     if (!times || times.startedAt == null) return;
-    await persist({ startedAt: times.startedAt, endedAt: now().toISOString() });
+    const ok = await persist({ startedAt: times.startedAt, endedAt: now().toISOString() });
+    if (!ok) return;
     setMode('idle');
   }
 
@@ -121,7 +157,8 @@ export default function WorkoutTimer({
       setError('Pick a time between your start and now.');
       return;
     }
-    await persist({ startedAt: times.startedAt, endedAt: end });
+    const ok = await persist({ startedAt: times.startedAt, endedAt: end });
+    if (!ok) return;
     setMode('idle');
     setError(null);
   }
@@ -143,13 +180,15 @@ export default function WorkoutTimer({
       setError("End time can't be in the future.");
       return;
     }
-    await persist({ startedAt: start, endedAt: end });
+    const ok = await persist({ startedAt: start, endedAt: end });
+    if (!ok) return;
     setMode('idle');
     setError(null);
   }
 
   async function resetTimer() {
-    await persist({ startedAt: null, endedAt: null });
+    const ok = await persist({ startedAt: null, endedAt: null });
+    if (!ok) return;
     setMode('idle');
     setError(null);
   }
