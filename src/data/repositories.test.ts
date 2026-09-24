@@ -268,4 +268,14 @@ describe('workoutDayRepo', () => {
     await workoutDayRepo.clearProgress(9, 1, 'bench');
     expect(await workoutDayRepo.get(9, 1, 'bench')).toBeUndefined();
   });
+  it('concurrent upserts for a new day create exactly one row', async () => {
+    await Promise.all([
+      workoutDayRepo.setTimes(3, 1, 'deadlift', { startedAt: 'S', endedAt: null }),
+      workoutDayRepo.saveProgress(3, 1, 'deadlift', { 'main:1': { done: true, actualReps: 5 } }, 'n'),
+    ]);
+    const rows = await workoutDayRepo.forCycle(3);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ startedAt: 'S', notes: 'n' });
+    expect(rows[0].progress['main:1']).toEqual({ done: true, actualReps: 5 });
+  });
 });

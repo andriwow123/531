@@ -171,12 +171,14 @@ function findDay(cycleId: number, week: WeekNumber, liftKey: LiftKey): Promise<W
 }
 
 async function upsertDay(cycleId: number, week: WeekNumber, liftKey: LiftKey, patch: Partial<WorkoutDay>): Promise<void> {
-  const existing = await findDay(cycleId, week, liftKey);
-  if (existing?.id !== undefined) {
-    await db.workoutDays.update(existing.id, patch);
-  } else {
-    await db.workoutDays.add({ cycleId, week, liftKey, startedAt: null, endedAt: null, progress: {}, notes: '', ...patch });
-  }
+  await db.transaction('rw', db.workoutDays, async () => {
+    const existing = await findDay(cycleId, week, liftKey);
+    if (existing?.id !== undefined) {
+      await db.workoutDays.update(existing.id, patch);
+    } else {
+      await db.workoutDays.add({ cycleId, week, liftKey, startedAt: null, endedAt: null, progress: {}, notes: '', ...patch });
+    }
+  });
 }
 
 export const workoutDayRepo = {
@@ -188,7 +190,9 @@ export const workoutDayRepo = {
   saveProgress: (cycleId: number, week: WeekNumber, liftKey: LiftKey, progress: WorkoutDay['progress'], notes: string) =>
     upsertDay(cycleId, week, liftKey, { progress, notes }),
   clearProgress: async (cycleId: number, week: WeekNumber, liftKey: LiftKey): Promise<void> => {
-    const existing = await findDay(cycleId, week, liftKey);
-    if (existing?.id !== undefined) await db.workoutDays.update(existing.id, { progress: {}, notes: '' });
+    await db.transaction('rw', db.workoutDays, async () => {
+      const existing = await findDay(cycleId, week, liftKey);
+      if (existing?.id !== undefined) await db.workoutDays.update(existing.id, { progress: {}, notes: '' });
+    });
   },
 };
