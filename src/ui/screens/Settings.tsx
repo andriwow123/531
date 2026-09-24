@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Unit, TemplateKey, LiftKey } from '../../domain';
-import { orderedLifts, moveItem } from '../../domain';
+import { orderedLifts, moveItem, ROUNDING_STEPS } from '../../domain';
 import { cycleRepo, profileRepo } from '../../data/repositories';
 import type { Cycle, Profile } from '../../data/repositories';
 import { convertUnits } from '../../data/units';
@@ -49,12 +49,6 @@ const THEMES: { value: 'dark' | 'light' | 'system'; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'system', label: 'System' },
 ];
-
-/** Rounding increments offered per unit, ordered smallest -> largest. */
-const ROUNDING_STEPS: Record<Unit, number[]> = {
-  kg: [1.25, 2.5, 5],
-  lb: [2.5, 5, 10],
-};
 
 const REST_SECONDS_MIN = 30;
 const REST_SECONDS_MAX = 600;

@@ -1,6 +1,10 @@
 export type { Unit, LiftKey, LiftCategory, WeekNumber, TemplateKey, SetKind, WorkingSet } from './types';
 
-export { roundToIncrement } from './rounding';
+export { roundToIncrement, ROUNDING_STEPS, defaultRoundingFor, effectiveRounding, convertRoundingStep } from './rounding';
+export {
+  formatElapsed, formatWorkoutDuration, toTimeInput, atTimeOnDay, resolveEndTime, guessFinishTime, isLeftRunning,
+} from './workoutTime';
+export { workoutRowKey } from './workoutRow';
 export { computeTrainingMax } from './trainingMax';
 export { estimate1RM } from './estimate';
 export { generateMainSets, generateWarmups, generateSupplemental } from './sets';
