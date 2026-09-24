@@ -31,7 +31,7 @@ export function personalRecord(sessions: Session[], liftKey: LiftKey): PR | null
     { est1RM: series[0].est1RM, date: series[0].date });
 }
 
-export interface CycleLogEntry { date: string; liftKey: LiftKey; week: WeekNumber; topWeight: number; topReps: number | null; isAmrap: boolean; est1RM: number | null; }
+export interface CycleLogEntry { cycleId: number; date: string; liftKey: LiftKey; week: WeekNumber; topWeight: number; topReps: number | null; isAmrap: boolean; est1RM: number | null; }
 export interface CycleLogGroup { cycleIndex: number; startedAt: string; entries: CycleLogEntry[]; }
 
 export function cycleLog(sessions: Session[], cycles: Cycle[]): CycleLogGroup[] {
@@ -49,6 +49,7 @@ export function cycleLog(sessions: Session[], cycles: Cycle[]): CycleLogGroup[] 
       (hi, x) => (hi == null || x.weight > hi.weight ? x : hi), undefined);
     if (!top) continue;
     const entry: CycleLogEntry = {
+      cycleId: s.cycleId,
       date: s.date, liftKey: s.liftKey, week: s.week,
       topWeight: top.weight, isAmrap: top.isAmrap,
       topReps: top.isAmrap ? s.amrapReps : top.targetReps,

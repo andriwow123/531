@@ -5,11 +5,12 @@ import {
   trainingMaxSeries,
   personalRecord,
   cycleLog,
+  formatWorkoutDuration,
   LIFT_ORDER,
 } from '../../domain';
 import type { LiftKey, Unit } from '../../domain';
-import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
-import type { Cycle, Lift, Session } from '../../data/repositories';
+import { cycleRepo, liftRepo, profileRepo, sessionRepo, workoutDayRepo } from '../../data/repositories';
+import type { Cycle, Lift, Session, WorkoutDay } from '../../data/repositories';
 import ProgressChart from '../components/ProgressChart';
 import BodyweightCard from '../components/BodyweightCard';
 import SupportingHistory from '../components/SupportingHistory';
@@ -39,6 +40,7 @@ interface LoadedData {
   cycles: Cycle[];
   lifts: Lift[];
   unit: Unit;
+  workoutDays: WorkoutDay[];
 }
 
 export default function History() {
@@ -49,14 +51,15 @@ export default function History() {
     let cancelled = false;
 
     async function load() {
-      const [sessions, cycles, lifts, profile] = await Promise.all([
+      const [sessions, cycles, lifts, profile, workoutDays] = await Promise.all([
         sessionRepo.all(),
         cycleRepo.all(),
         liftRepo.all(),
         profileRepo.get(),
+        workoutDayRepo.all(),
       ]);
       if (cancelled) return;
-      setData({ sessions, cycles, lifts, unit: profile?.units ?? 'kg' });
+      setData({ sessions, cycles, lifts, unit: profile?.units ?? 'kg', workoutDays });
     }
 
     load();
@@ -184,22 +187,31 @@ export default function History() {
                   Cycle {group.cycleIndex}
                 </div>
                 <ul className="mt-2 flex flex-col gap-2 list-none p-0 m-0">
-                  {group.entries.map((entry, i) => (
-                    <li key={i} className="flex items-center justify-between gap-2 text-[13px]">
-                      <span className="text-[var(--muted)]">
-                        {formatDate(entry.date)} · {liftName(entry.liftKey)} · Week {entry.week}
-                      </span>
-                      <span className="font-bold tabular-nums whitespace-nowrap">
-                        {entry.topWeight} {data.unit} × {entry.topReps ?? '—'}
-                        {entry.est1RM != null && (
-                          <span className="ml-1 font-semibold text-[var(--muted)]">
-                            (est {Math.round(entry.est1RM)}
-                            {data.unit})
-                          </span>
-                        )}
-                      </span>
-                    </li>
-                  ))}
+                  {group.entries.map((entry, i) => {
+                    const day = data.workoutDays.find(
+                      (d) => d.cycleId === entry.cycleId && d.week === entry.week && d.liftKey === entry.liftKey,
+                    );
+                    const duration =
+                      day?.startedAt && day.endedAt ? formatWorkoutDuration(day.startedAt, day.endedAt) : null;
+
+                    return (
+                      <li key={i} className="flex items-center justify-between gap-2 text-[13px]">
+                        <span className="text-[var(--muted)]">
+                          {formatDate(entry.date)} · {liftName(entry.liftKey)} · Week {entry.week}
+                          {duration && ` · ${duration}`}
+                        </span>
+                        <span className="font-bold tabular-nums whitespace-nowrap">
+                          {entry.topWeight} {data.unit} × {entry.topReps ?? '—'}
+                          {entry.est1RM != null && (
+                            <span className="ml-1 font-semibold text-[var(--muted)]">
+                              (est {Math.round(entry.est1RM)}
+                              {data.unit})
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </li>
             ))}

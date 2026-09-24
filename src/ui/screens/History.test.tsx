@@ -9,6 +9,7 @@ import {
   sessionRepo,
   settingsRepo,
   supportingDoneRepo,
+  workoutDayRepo,
 } from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
 import { SettingsProvider } from '../settings/SettingsContext';
@@ -28,6 +29,8 @@ function renderHistory() {
     </SettingsProvider>,
   );
 }
+
+const at = (h: number, m: number) => new Date(2026, 8, 24, h, m).toISOString();
 
 async function seed() {
   await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
@@ -145,6 +148,43 @@ describe('History', () => {
     // One "Est. 1RM" toggle button per lift card (chart renders unconditionally).
     expect(screen.getAllByRole('button', { name: /est\. 1rm/i }).length).toBe(4);
     expect(screen.getByText(/85 kg × 7/)).toBeTruthy();
+  });
+
+  it('shows the workout duration next to a cycle-log entry with a timed day, and omits it for one without', async () => {
+    const cycleId = await seed();
+    await sessionRepo.add({
+      cycleId,
+      week: 1,
+      liftKey: 'press',
+      date: '2026-01-05',
+      status: 'done',
+      sets: [{ targetReps: 1, weight: 85, actualReps: 7, done: true, isAmrap: true, kind: 'main' }],
+      amrapReps: 7,
+      estimated1RM: 106,
+      rpe: null,
+      notes: '',
+    });
+    await sessionRepo.add({
+      cycleId,
+      week: 1,
+      liftKey: 'squat',
+      date: '2026-01-06',
+      status: 'done',
+      sets: [{ targetReps: 1, weight: 120, actualReps: 5, done: true, isAmrap: true, kind: 'main' }],
+      amrapReps: 5,
+      estimated1RM: 140,
+      rpe: null,
+      notes: '',
+    });
+    await workoutDayRepo.setTimes(cycleId, 1, 'press', { startedAt: at(18, 0), endedAt: at(18, 52) });
+
+    renderHistory();
+
+    const pressEntry = await screen.findByText(/Overhead Press · Week 1/);
+    expect(pressEntry.textContent).toBe('Jan 5, 2026 · Overhead Press · Week 1 · 52 min');
+
+    const squatEntry = screen.getByText(/Squat · Week 1/);
+    expect(squatEntry.textContent).toBe('Jan 6, 2026 · Squat · Week 1');
   });
 });
 
