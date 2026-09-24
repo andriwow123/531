@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Unit, TemplateKey, LiftKey } from '../../domain';
-import { orderedLifts, moveItem, ROUNDING_STEPS } from '../../domain';
-import { cycleRepo, profileRepo } from '../../data/repositories';
-import type { Cycle, Profile } from '../../data/repositories';
+import { orderedLifts, moveItem, ROUNDING_STEPS, effectiveRounding } from '../../domain';
+import { cycleRepo, liftRepo, profileRepo } from '../../data/repositories';
+import type { Cycle, Lift, Profile } from '../../data/repositories';
 import { convertUnits } from '../../data/units';
 import { exportBackup, parseBackup, importBackup } from '../../data/backup';
 import type { BackupFile } from '../../data/backup';
@@ -219,6 +219,7 @@ export default function Settings() {
   const display = resolveDisplay(settings.displayPreset, settings.displayOverrides);
 
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [lifts, setLifts] = useState<Lift[] | null>(null);
   const [cycle, setCycle] = useState<Cycle | null | undefined>(undefined);
   const [tmInputs, setTmInputs] = useState<Record<LiftKey, string>>({
     press: '',
@@ -235,6 +236,16 @@ export default function Settings() {
     let cancelled = false;
     profileRepo.get().then((p) => {
       if (!cancelled) setProfile(p ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    liftRepo.all().then((l) => {
+      if (!cancelled) setLifts(l);
     });
     return () => {
       cancelled = true;
@@ -296,14 +307,15 @@ export default function Settings() {
     window.location.reload();
   }
 
-  async function changeRounding(dir: 1 | -1) {
-    if (!profile) return;
-    const steps = ROUNDING_STEPS[profile.units];
-    const next = stepWithin(steps, profile.roundingIncrement, dir);
-    if (next === profile.roundingIncrement) return;
-    const updated = { ...profile, roundingIncrement: next };
-    setProfile(updated);
-    await profileRepo.save(updated);
+  async function changeLiftRounding(key: LiftKey, dir: 1 | -1) {
+    if (!profile || !lifts) return;
+    const lift = lifts.find((l) => l.key === key);
+    if (!lift) return;
+    const current = effectiveRounding(lift.roundingIncrement, profile.roundingIncrement);
+    const next = stepWithin(ROUNDING_STEPS[profile.units], current, dir);
+    if (next === current) return;
+    await liftRepo.update(key, { roundingIncrement: next });
+    setLifts(lifts.map((l) => (l.key === key ? { ...l, roundingIncrement: next } : l)));
   }
 
   // Turning the notify switch ON is the user gesture that lets us ask for
@@ -402,10 +414,6 @@ export default function Settings() {
       setPendingRestore(null);
     }
   }
-
-  const roundingSteps = profile ? ROUNDING_STEPS[profile.units] : null;
-  const roundingIndex =
-    profile && roundingSteps ? roundingSteps.indexOf(profile.roundingIncrement) : -1;
 
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 text-[var(--text)] flex justify-center">
@@ -527,17 +535,28 @@ export default function Settings() {
           </Section>
 
           <Section title="Rounding">
-            {profile && roundingSteps ? (
-              <Stepper
-                label="Round loads to"
-                valueLabel={`${profile.roundingIncrement}${profile.units}`}
-                onDecrease={() => changeRounding(-1)}
-                onIncrease={() => changeRounding(1)}
-                decreaseLabel="Decrease rounding increment"
-                increaseLabel="Increase rounding increment"
-                disableDecrease={roundingIndex <= 0}
-                disableIncrease={roundingIndex === -1 || roundingIndex >= roundingSteps.length - 1}
-              />
+            {profile && lifts ? (
+              <>
+                {orderedLifts(settings.liftOrder).map((key) => {
+                  const steps = ROUNDING_STEPS[profile.units];
+                  const value = effectiveRounding(lifts.find((l) => l.key === key)?.roundingIncrement, profile.roundingIncrement);
+                  const index = steps.indexOf(value);
+                  return (
+                    <Stepper
+                      key={key}
+                      label={LIFT_NAMES[key]}
+                      valueLabel={`${value}${profile.units}`}
+                      onDecrease={() => changeLiftRounding(key, -1)}
+                      onIncrease={() => changeLiftRounding(key, 1)}
+                      decreaseLabel={`Decrease ${LIFT_NAMES[key]} rounding`}
+                      increaseLabel={`Increase ${LIFT_NAMES[key]} rounding`}
+                      disableDecrease={index === 0}
+                      disableIncrease={index === steps.length - 1}
+                    />
+                  );
+                })}
+                <p className="text-[12px] text-[var(--muted)]">Each lift's working sets round to the nearest step you can load.</p>
+              </>
             ) : (
               <p className="text-sm text-[var(--muted)]">Loading…</p>
             )}

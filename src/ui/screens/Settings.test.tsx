@@ -28,6 +28,17 @@ async function seedProfile() {
   await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
 }
 
+/** 4 lifts; only squat carries an explicit roundingIncrement (5) — the rest
+ *  fall back to the profile's roundingIncrement (2.5, per seedProfile). */
+async function seedLifts() {
+  await liftRepo.bulkSave([
+    { key: 'press', name: 'Overhead Press', category: 'upper', oneRm: 100, trainingMax: 100, increment: 2.5 },
+    { key: 'bench', name: 'Bench Press', category: 'upper', oneRm: 100, trainingMax: 100, increment: 2.5 },
+    { key: 'squat', name: 'Squat', category: 'lower', oneRm: 100, trainingMax: 100, increment: 5, roundingIncrement: 5 },
+    { key: 'deadlift', name: 'Deadlift', category: 'lower', oneRm: 100, trainingMax: 100, increment: 5 },
+  ]);
+}
+
 async function seedCycle(): Promise<Cycle> {
   const id = await cycleRepo.add({
     index: 1,
@@ -95,20 +106,6 @@ describe('Settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Detailed' }));
 
     await waitFor(async () => expect((await settingsRepo.get()).displayPreset).toBe('detailed'));
-  });
-
-  it('changing Rounding persists the new increment via profileRepo', async () => {
-    await seedProfile();
-    renderSettings();
-
-    await screen.findByRole('heading', { name: /settings/i });
-
-    const before = await profileRepo.get();
-    expect(before?.roundingIncrement).toBe(2.5);
-
-    fireEvent.click(await screen.findByRole('button', { name: /increase rounding increment/i }));
-
-    await waitFor(async () => expect((await profileRepo.get())?.roundingIncrement).toBe(5));
   });
 
   it('toggling Exercise demos persists exerciseDemos', async () => {
@@ -520,6 +517,82 @@ describe('Settings — notify permission', () => {
 
     expect(requestPermission).not.toHaveBeenCalled();
     await waitFor(async () => expect((await settingsRepo.get()).restTimer.notify).toBe(false));
+  });
+});
+
+describe('Settings — per-lift rounding', () => {
+  it('shows a rounding stepper per lift, labelled by lift name, reflecting each lift\'s effective rounding', async () => {
+    await seedProfile();
+    await seedLifts();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    // press/bench/deadlift have no roundingIncrement of their own, so they
+    // fall back to the profile's 2.5; squat has its own explicit 5. Each
+    // stepper's value sits alongside its +/- buttons in the same wrapper div.
+    const press = await screen.findByRole('button', { name: /increase overhead press rounding/i });
+    expect(press.parentElement as HTMLElement).toHaveTextContent('2.5kg');
+
+    const bench = screen.getByRole('button', { name: /increase bench press rounding/i });
+    expect(bench.parentElement as HTMLElement).toHaveTextContent('2.5kg');
+
+    const deadlift = screen.getByRole('button', { name: /increase deadlift rounding/i });
+    expect(deadlift.parentElement as HTMLElement).toHaveTextContent('2.5kg');
+
+    const squat = screen.getByRole('button', { name: /increase squat rounding/i });
+    expect(squat.parentElement as HTMLElement).toHaveTextContent('5kg');
+
+    // The old single global stepper is gone.
+    expect(screen.queryByText('Round loads to')).toBeNull();
+  });
+
+  it('clicking "Increase Overhead Press rounding" persists press roundingIncrement 5 via liftRepo', async () => {
+    await seedProfile();
+    await seedLifts();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    const before = (await liftRepo.all()).find((l) => l.key === 'press');
+    expect(before?.roundingIncrement).toBeUndefined();
+
+    fireEvent.click(await screen.findByRole('button', { name: /increase overhead press rounding/i }));
+
+    await waitFor(async () => {
+      const press = (await liftRepo.all()).find((l) => l.key === 'press');
+      expect(press?.roundingIncrement).toBe(5);
+    });
+  });
+
+  it('clicking "Decrease Squat rounding" persists squat roundingIncrement 2.5 via liftRepo', async () => {
+    await seedProfile();
+    await seedLifts();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    const before = (await liftRepo.all()).find((l) => l.key === 'squat');
+    expect(before?.roundingIncrement).toBe(5);
+
+    fireEvent.click(await screen.findByRole('button', { name: /decrease squat rounding/i }));
+
+    await waitFor(async () => {
+      const squat = (await liftRepo.all()).find((l) => l.key === 'squat');
+      expect(squat?.roundingIncrement).toBe(2.5);
+    });
+  });
+
+  it('shows the per-lift rounding caption', async () => {
+    await seedProfile();
+    await seedLifts();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+
+    expect(
+      await screen.findByText("Each lift's working sets round to the nearest step you can load."),
+    ).toBeInTheDocument();
   });
 });
 
