@@ -351,4 +351,29 @@ describe('LiftCard', () => {
     // template from the `cycle` prop, not `settings.template.selected`.
     expect(screen.getAllByText('supplemental')).toHaveLength(5);
   });
+
+  it('rebuilds the set list when the cycle template changes on an in-place rerender (e.g. a Settings edit to the active cycle)', async () => {
+    const cycle = await seedCycle(); // template: 'base'
+    const { rerender } = renderCard(cycle);
+
+    await screen.findByRole('heading', { name: 'Deadlift' });
+    expect(screen.queryAllByText('supplemental')).toHaveLength(0);
+
+    const bbbCycle: Cycle = { ...cycle, template: 'bbb' };
+    rerender(
+      <SettingsProvider>
+        <LiftCard
+          liftKey="deadlift"
+          week={1}
+          cycle={bbbCycle}
+          unit="kg"
+          roundingIncrement={2.5}
+          dayNumber={2}
+          settings={defaultSettings}
+        />
+      </SettingsProvider>,
+    );
+
+    expect(screen.getAllByText('supplemental')).toHaveLength(5);
+  });
 });

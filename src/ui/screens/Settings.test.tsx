@@ -309,6 +309,36 @@ describe('Settings', () => {
     ).toBeNull();
   });
 
+  it('changing the template or 5s PRO writes through to the active cycle immediately, and shows the live-apply caption', async () => {
+    await seedProfile();
+    const cycle = await seedCycle(); // template: 'base', fivesPro: false
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+    // Wait for the cycle to finish loading (Training maxes reflects it) before interacting.
+    await screen.findByLabelText(/squat training max/i);
+
+    expect(
+      screen.getByText('Changes apply to your current cycle right away.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'BBB' }));
+
+    await waitFor(async () => {
+      const active = await cycleRepo.active();
+      expect(active?.id).toBe(cycle.id);
+      expect(active?.template).toBe('bbb');
+    });
+    await waitFor(async () => expect((await settingsRepo.get()).template.selected).toBe('bbb'));
+
+    fireEvent.click(screen.getByRole('switch', { name: /5s pro/i }));
+
+    await waitFor(async () => {
+      const active = await cycleRepo.active();
+      expect(active?.fivesPro).toBe(true);
+    });
+  });
+
   it('shows captions describing the 5s PRO and Warm-up sets toggles', async () => {
     await seedProfile();
     renderSettings();

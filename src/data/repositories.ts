@@ -63,6 +63,8 @@ export const cycleRepo = {
     if (!c) return;
     await db.cycles.update(cycleId, { tm: { ...c.tm, [liftKey]: tm } });
   },
+  setTemplate: (cycleId: number, template: TemplateKey, fivesPro: boolean): Promise<void> =>
+    db.cycles.update(cycleId, { template, fivesPro }).then(() => {}),
 };
 export const sessionRepo = {
   forCycle: (cycleId: number): Promise<Session[]> => db.sessions.where('cycleId').equals(cycleId).toArray(),

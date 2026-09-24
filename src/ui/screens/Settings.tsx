@@ -9,7 +9,7 @@ import { convertUnits } from '../../data/units';
 import { exportBackup, parseBackup, importBackup } from '../../data/backup';
 import type { BackupFile } from '../../data/backup';
 import { resolveDisplay } from '../../settings/display';
-import type { DisplayPreset, DisplayElement } from '../../settings/schema';
+import type { DisplayPreset, DisplayElement, SettingsState } from '../../settings/schema';
 import { useSettings } from '../settings/SettingsContext';
 import { NavIconLink, HistoryIcon, SettingsIcon, HomeIcon } from '../components/NavIcons';
 import { OrderableList } from '../components/OrderableList';
@@ -283,6 +283,19 @@ export default function Settings() {
     setCycle({ ...cycle, tm: { ...cycle.tm, [key]: value } });
   }
 
+  // Template/5s PRO changes always update live settings (so future cycles
+  // pick them up too), and additionally write through to the active cycle
+  // (if any) so the CURRENT cycle's workouts change right away — otherwise
+  // a mid-cycle template change silently did nothing until the next cycle.
+  async function changeTemplate(patch: Partial<Pick<SettingsState['template'], 'selected' | 'fivesPro'>>) {
+    const next = { ...settings.template, ...patch };
+    updateSettings({ template: next });
+    if (cycle && cycle.id != null) {
+      await cycleRepo.setTemplate(cycle.id, next.selected, next.fivesPro);
+      setCycle({ ...cycle, template: next.selected, fivesPro: next.fivesPro });
+    }
+  }
+
   function toggleDisplay(el: DisplayElement) {
     updateSettings({
       displayOverrides: { ...settings.displayOverrides, [el]: !display[el] },
@@ -474,17 +487,18 @@ export default function Settings() {
             <Segmented
               value={settings.template.selected}
               options={TEMPLATES}
-              onChange={(v) => updateSettings({ template: { ...settings.template, selected: v } })}
+              onChange={(v) => void changeTemplate({ selected: v })}
             />
             <p className="text-[12px] text-[var(--muted)]">
               {TEMPLATE_DESCRIPTIONS[settings.template.selected]}
             </p>
+            <p className="text-[12px] text-[var(--muted)]">
+              Changes apply to your current cycle right away.
+            </p>
             <ToggleRow
               label="5s PRO (no AMRAP in week 3)"
               checked={settings.template.fivesPro}
-              onChange={() =>
-                updateSettings({ template: { ...settings.template, fivesPro: !settings.template.fivesPro } })
-              }
+              onChange={() => void changeTemplate({ fivesPro: !settings.template.fivesPro })}
             />
             <p className="text-[12px] text-[var(--muted)]">
               Every main set is 5 reps (no AMRAP) — steadier progress.

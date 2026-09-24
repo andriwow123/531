@@ -75,6 +75,26 @@ describe('cycleRepo.updateTrainingMax', () => {
     await expect(cycleRepo.updateTrainingMax(999, 'press', 65)).resolves.toBeUndefined();
   });
 });
+describe('cycleRepo.setTemplate', () => {
+  it("updates the active cycle's template and fivesPro, leaving TMs unchanged", async () => {
+    const cycle: Cycle = {
+      index: 1,
+      startedAt: '2026-01-01',
+      status: 'active',
+      template: 'base',
+      fivesPro: false,
+      tm: { press: 60, bench: 85, squat: 119, deadlift: 150 },
+    };
+    const id = await cycleRepo.add(cycle);
+
+    await cycleRepo.setTemplate(id, 'fsl', true);
+
+    const active = await cycleRepo.active();
+    expect(active?.template).toBe('fsl');
+    expect(active?.fivesPro).toBe(true);
+    expect(active?.tm).toEqual({ press: 60, bench: 85, squat: 119, deadlift: 150 });
+  });
+});
 describe('sessionRepo', () => {
   it('round-trips a session with nested sets, then applies a patch', async () => {
     const session: Session = {

@@ -129,7 +129,7 @@ export default function LiftCard({
   const [tmInput, setTmInput] = useState('');
 
   const showWarmups = settings.template.warmups && display.warmups;
-  const workoutKey = `${liftKey}:${week}:${cycle.id ?? 'x'}:${cycle.tm[liftKey]}:${showWarmups}`;
+  const workoutKey = `${liftKey}:${week}:${cycle.id ?? 'x'}:${cycle.tm[liftKey]}:${showWarmups}:${cycle.template}:${cycle.fivesPro}:${roundingIncrement}`;
   if (workoutKey !== rowsForRef) {
     setRows(
       withKindIndex(
