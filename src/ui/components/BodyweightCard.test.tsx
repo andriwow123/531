@@ -97,53 +97,111 @@ describe('BodyweightCard', () => {
     expect(rows[1].textContent).toMatch(/84/);
   });
 
-  it('edits an entry weight inline and persists it', async () => {
-    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
-    const id = await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
-
-    render(<BodyweightCard />);
-    await screen.findAllByRole('listitem');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit 2026-01-01 weight' }));
-
-    const editInput = screen.getByLabelText('Edit 2026-01-01 weight') as HTMLInputElement;
-    expect(editInput.value).toBe('84');
-    fireEvent.change(editInput, { target: { value: '85,5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(async () => {
-      const all = await bodyweightRepo.all();
-      expect(all.find((entry) => entry.id === id)?.weight).toBe(85.5);
-    });
-    const rows = screen.getAllByRole('listitem');
-    expect(rows[0].textContent).toMatch(/85\.5/);
-  });
-
-  it('cancels an inline edit without persisting a change', async () => {
+  it('tapping an entry row opens the editor below it, prefilled with the current weight', async () => {
     await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
     await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
 
     render(<BodyweightCard />);
     await screen.findAllByRole('listitem');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit 2026-01-01 weight' }));
-    const editInput = screen.getByLabelText('Edit 2026-01-01 weight') as HTMLInputElement;
-    fireEvent.change(editInput, { target: { value: '999' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const row = screen.getByRole('button', { name: /Jan 1/ });
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('Weight for Jan 1')).toBeNull();
 
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Edit 2026-01-01 weight' })).toBeTruthy();
-    expect((await bodyweightRepo.all())[0].weight).toBe(84);
+    fireEvent.click(row);
+
+    expect(row).toHaveAttribute('aria-expanded', 'true');
+    const editInput = screen.getByLabelText('Weight for Jan 1') as HTMLInputElement;
+    expect(editInput.value).toBe('84');
   });
 
-  it('deletes an entry after inline confirmation', async () => {
+  it('tapping the open row again closes the editor', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
+
+    render(<BodyweightCard />);
+    await screen.findAllByRole('listitem');
+
+    const row = screen.getByRole('button', { name: /Jan 1/ });
+    fireEvent.click(row);
+    expect(screen.getByLabelText('Weight for Jan 1')).toBeTruthy();
+
+    fireEvent.click(row);
+
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('Weight for Jan 1')).toBeNull();
+  });
+
+  it('editing the weight and saving persists the new value and closes the editor', async () => {
     await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
     const id = await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
 
     render(<BodyweightCard />);
     await screen.findAllByRole('listitem');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete 2026-01-01 entry' }));
+    fireEvent.click(screen.getByRole('button', { name: /Jan 1/ }));
+    const editInput = screen.getByLabelText('Weight for Jan 1') as HTMLInputElement;
+    fireEvent.change(editInput, { target: { value: '83,5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(async () => {
+      const all = await bodyweightRepo.all();
+      expect(all.find((entry) => entry.id === id)?.weight).toBe(83.5);
+    });
+    expect(screen.queryByLabelText('Weight for Jan 1')).toBeNull();
+    const rows = screen.getAllByRole('listitem');
+    expect(rows[0].textContent).toMatch(/83\.5/);
+  });
+
+  it('disables Save when the entered weight is not a valid positive number', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
+
+    render(<BodyweightCard />);
+    await screen.findAllByRole('listitem');
+
+    fireEvent.click(screen.getByRole('button', { name: /Jan 1/ }));
+    const editInput = screen.getByLabelText('Weight for Jan 1') as HTMLInputElement;
+
+    fireEvent.change(editInput, { target: { value: '0' } });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    fireEvent.change(editInput, { target: { value: '' } });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    fireEvent.change(editInput, { target: { value: '85' } });
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
+  });
+
+  it('cancels an edit without persisting a change, closing the editor', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
+
+    render(<BodyweightCard />);
+    await screen.findAllByRole('listitem');
+
+    fireEvent.click(screen.getByRole('button', { name: /Jan 1/ }));
+    const editInput = screen.getByLabelText('Weight for Jan 1') as HTMLInputElement;
+    fireEvent.change(editInput, { target: { value: '999' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByLabelText('Weight for Jan 1')).toBeNull();
+    expect((await bodyweightRepo.all())[0].weight).toBe(84);
+  });
+
+  it('"Delete entry" asks for confirmation, then Delete removes the entry', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    const id = await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
+
+    render(<BodyweightCard />);
+    await screen.findAllByRole('listitem');
+
+    fireEvent.click(screen.getByRole('button', { name: /Jan 1/ }));
+    expect(screen.queryByText('Delete this entry?')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }));
+
+    expect(screen.getByText('Delete this entry?')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm delete 2026-01-01 entry' }));
 
     await waitFor(async () => {
@@ -151,5 +209,22 @@ describe('BodyweightCard', () => {
       expect(all.find((entry) => entry.id === id)).toBeUndefined();
     });
     expect(await screen.findByText('Log your bodyweight to see the trend.')).toBeTruthy();
+  });
+
+  it('opening a second row closes the first', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
+    await bodyweightRepo.add({ date: '2026-02-01', weight: 82.5 });
+
+    render(<BodyweightCard />);
+    await screen.findAllByRole('listitem');
+
+    fireEvent.click(screen.getByRole('button', { name: /Jan 1/ }));
+    expect(screen.getByLabelText('Weight for Jan 1')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Feb 1/ }));
+
+    expect(screen.queryByLabelText('Weight for Jan 1')).toBeNull();
+    expect(screen.getByLabelText('Weight for Feb 1')).toBeTruthy();
   });
 });

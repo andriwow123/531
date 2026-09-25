@@ -14,6 +14,7 @@ import { bodyweightSeries, latestWeight, bodyweightAxis } from '../../domain';
 import type { Unit } from '../../domain';
 import { bodyweightRepo, profileRepo } from '../../data/repositories';
 import type { BodyweightEntry } from '../../data/repositories';
+import Chevron from './Chevron';
 
 /** Parses a possibly comma-decimal weight string; returns null if it isn't a
  *  finite, positive number (the shared validity rule for both logging and
@@ -296,81 +297,90 @@ export default function BodyweightCard() {
         <ul className="mt-4 flex flex-col gap-1.5 list-none p-0 m-0">
           {sortedEntries.map((entry) => {
             const dateLabel = formatAxisDate(entry.date);
-            const isEditing = editingId === entry.id;
             const isConfirmingDelete = confirmingDeleteId === entry.id;
+            const isOpen = editingId === entry.id || isConfirmingDelete;
             return (
-              <li
-                key={entry.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-[13px]"
-              >
-                <span className="font-semibold text-[var(--muted)]">{dateLabel}</span>
-
-                {isEditing ? (
-                  <span className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      aria-label={`Edit ${entry.date} weight`}
-                      value={editValue}
-                      onChange={(ev) => setEditValue(ev.target.value)}
-                      autoFocus
-                      className="w-20 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-center font-bold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                    />
-                    <button
-                      type="button"
-                      onClick={cancelEdit}
-                      className="min-h-[32px] rounded-[var(--r-pill)] px-2 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => saveEdit(entry.id)}
-                      className="min-h-[32px] rounded-[var(--r-pill)] bg-[var(--accent)] px-3 text-[12px] font-extrabold text-[var(--on-accent)]"
-                    >
-                      Save
-                    </button>
-                  </span>
-                ) : isConfirmingDelete ? (
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-[12px] font-semibold text-[var(--muted)]">Delete?</span>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmingDeleteId(null)}
-                      className="min-h-[32px] rounded-[var(--r-pill)] px-2 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => confirmDelete(entry.id)}
-                      aria-label={`Confirm delete ${entry.date} entry`}
-                      className="min-h-[32px] rounded-[var(--r-pill)] bg-[var(--accent)] px-3 text-[12px] font-extrabold text-[var(--on-accent)]"
-                    >
-                      Delete
-                    </button>
-                  </span>
-                ) : (
+              <li key={entry.id} className="overflow-hidden rounded-lg bg-[var(--surface-2)] text-[13px]">
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => (isOpen ? cancelEdit() : startEdit(entry.id, entry.weight))}
+                  className="flex min-h-9 w-full items-center justify-between gap-2 px-3 py-2 text-left"
+                >
+                  <span className="font-semibold text-[var(--muted)]">{dateLabel}</span>
                   <span className="flex items-center gap-1.5">
                     <span className="font-bold tabular-nums text-[var(--text)]">{entry.weight}</span>
                     <span className="text-[var(--muted)]">{unit}</span>
-                    <button
-                      type="button"
-                      onClick={() => startEdit(entry.id, entry.weight)}
-                      aria-label={`Edit ${entry.date} weight`}
-                      className="min-h-[32px] min-w-[32px] rounded-[var(--r-pill)] px-2 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--accent)]"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => startDeleteConfirm(entry.id)}
-                      aria-label={`Delete ${entry.date} entry`}
-                      className="min-h-[32px] min-w-[32px] rounded-[var(--r-pill)] px-2 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--accent)]"
-                    >
-                      Delete
-                    </button>
+                    <Chevron open={isOpen} />
                   </span>
+                </button>
+
+                {isOpen && (
+                  <div className="flex flex-col gap-3 bg-[var(--surface)] p-3">
+                    <span className="text-[12px] font-bold text-[var(--muted)]">{entry.date}</span>
+
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        aria-label={`Weight for ${dateLabel}`}
+                        value={editValue}
+                        onChange={(ev) => setEditValue(ev.target.value)}
+                        onFocus={(e) => e.currentTarget.select()}
+                        autoFocus
+                        className="w-full rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-3 py-3 text-2xl text-center font-extrabold text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                      />
+                      <span className="text-sm font-bold text-[var(--muted)]">{unit}</span>
+                    </span>
+
+                    {isConfirmingDelete ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[12px] font-semibold text-[var(--muted)]">Delete this entry?</span>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingDeleteId(null)}
+                          className="min-h-9 rounded-[var(--r-pill)] px-2 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => confirmDelete(entry.id)}
+                          aria-label={`Confirm delete ${entry.date} entry`}
+                          className="min-h-9 rounded-[var(--r-pill)] bg-[var(--accent)] px-3 text-[12px] font-extrabold text-[var(--on-accent)]"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startDeleteConfirm(entry.id)}
+                          className="min-h-9 text-[12px] font-bold text-[var(--muted)] underline underline-offset-2"
+                        >
+                          Delete entry
+                        </button>
+                        <span className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            className="min-h-9 rounded-[var(--r-pill)] px-3 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveEdit(entry.id)}
+                            disabled={parseWeightInput(editValue) == null}
+                            className="min-h-9 rounded-[var(--r-pill)] bg-[var(--accent)] px-4 text-[12px] font-extrabold text-[var(--on-accent)] disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </li>
             );
