@@ -184,7 +184,13 @@ export default function LiftCard({
     session !== undefined ? session : null,
   );
   const [saveError, setSaveError] = useState(false);
-  const savingRef = useRef(false);
+  // Days (their `dayKey`s) with a session save in flight on this card, kept
+  // once it succeeds. Per day, not one flag: leaving a day mid-save and
+  // coming straight back restores its draft with every main set still done,
+  // and that must not start a second save of the same day (a duplicate
+  // Session). Other days save independently; a failed save removes its day
+  // so it can be retried (Retry, or on return via its restored draft).
+  const savingRef = useRef(new Set<string>());
 
   // Inline training-max editor state (header). Only ever open while the lift
   // is unlogged; closed by Save (after persisting) or Cancel.
@@ -218,7 +224,6 @@ export default function LiftCard({
 
   useEffect(() => {
     let cancelled = false;
-    savingRef.current = false;
 
     // A parent that already loaded this cycle's sessions passes the
     // pre-resolved session (or `null` for "confirmed none") — skip the
@@ -316,20 +321,20 @@ export default function LiftCard({
     onLogged?.();
   }
 
-  // Guarded save: on failure (e.g. IndexedDB quota / private mode) reset the
-  // in-flight guard and surface a retry affordance rather than silently
-  // stranding a "done" workout with nothing persisted. A failure for a day
-  // the card has since left touches nothing here: the switch already reset
-  // the guard for the day on screen, and the failed day's saved draft still
-  // has its checks, so returning to it retries the save.
+  // Guarded save, at most one per day (see `savingRef`): on failure (e.g.
+  // IndexedDB quota / private mode) release that day's guard and surface a
+  // retry affordance rather than silently stranding a "done" workout with
+  // nothing persisted. A failure for a day the card has since left shows
+  // nothing on the day now on screen; the failed day's saved draft still has
+  // its checks, so returning to it retries the save.
   function triggerSave() {
-    if (savingRef.current) return;
-    savingRef.current = true;
-    setSaveError(false);
     const savingFor = dayKey;
+    if (savingRef.current.has(savingFor)) return;
+    savingRef.current.add(savingFor);
+    setSaveError(false);
     save().catch(() => {
+      savingRef.current.delete(savingFor);
       if (identityRef.current !== savingFor) return;
-      savingRef.current = false;
       setSaveError(true);
     });
   }
@@ -337,7 +342,7 @@ export default function LiftCard({
   // Auto-save the moment every main ("work") set is marked done.
   useEffect(() => {
     if (existingSession !== null) return;
-    if (savingRef.current) return;
+    if (savingRef.current.has(dayKey)) return;
     const mainRows = rows.filter((r) => r.set.kind === 'main');
     if (mainRows.length === 0 || !mainRows.every((r) => r.done)) return;
     triggerSave();

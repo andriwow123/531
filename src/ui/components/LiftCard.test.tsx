@@ -392,13 +392,17 @@ describe('LiftCard in-progress drafts', () => {
   // so a test can wait until the day's draft has loaded: taps only save once
   // it has (a tap in the few ms before may be replaced by the restore).
   let getSpy: MockInstance<typeof workoutDayRepo.get>;
+  // The real repo methods, for spies that hold or fail a call, then call through.
+  const realGet = workoutDayRepo.get;
+  const realAdd = sessionRepo.add;
 
   beforeEach(() => {
     getSpy = vi.spyOn(workoutDayRepo, 'get');
   });
 
   afterEach(() => {
-    getSpy.mockRestore();
+    // The get spy, plus any sessionRepo.add spy a test installed.
+    vi.restoreAllMocks();
   });
 
   async function draftsLoaded() {
@@ -408,6 +412,13 @@ describe('LiftCard in-progress drafts', () => {
   }
 
   const check = (label: string) => screen.getByRole('button', { name: `Mark ${label} done` });
+
+  // Every week-1 work set done, so the session auto-saves.
+  function finishWeek1MainSets() {
+    fireEvent.click(check('work set 1 (65kg)'));
+    fireEvent.click(check('work set 2 (75kg)'));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark work set 3 (85kg) AMRAP set done' }));
+  }
 
   it('keeps a checked set after the card unmounts and mounts again (navigating away and back, or a reload)', async () => {
     const cycle = await seedCycle();
@@ -618,6 +629,111 @@ describe('LiftCard in-progress drafts', () => {
       expect(check('work set 1 (70kg)')).toHaveAttribute('aria-pressed', 'false');
       expect((await workoutDayRepo.get(cycleId, 2, 'press'))?.progress ?? {}).toEqual({});
     });
+
+    it('never logs a day twice when you leave and come back while its session is still saving', async () => {
+      const cycle = await seedCycle();
+      const cycleId = cycle.id as number;
+      // Hold every session write until released.
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const addSpy = vi.spyOn(sessionRepo, 'add').mockImplementation(async (s) => {
+        await gate;
+        return realAdd(s);
+      });
+
+      const { rerender } = render(cardFor(cycle, { liftKey: 'press', week: 1, session: null }));
+      await draftsLoaded();
+      finishWeek1MainSets();
+      expect(addSpy).toHaveBeenCalledTimes(1); // week 1's session write, still pending
+
+      // Leave and come straight back while it's still saving: week 1's draft
+      // reloads with every main set done (nothing has cleared it yet).
+      rerender(cardFor(cycle, { liftKey: 'press', week: 2, session: null }));
+      await draftsLoaded();
+      rerender(cardFor(cycle, { liftKey: 'press', week: 1, session: null }));
+      await waitFor(() => expect(check('work set 1 (65kg)')).toHaveAttribute('aria-pressed', 'true'));
+      await draftsLoaded();
+
+      release();
+      expect(await screen.findByText(/logged this week/i)).toBeTruthy();
+      await act(async () => {
+        await Promise.allSettled(addSpy.mock.results.map((r) => r.value));
+      });
+
+      expect(addSpy).toHaveBeenCalledTimes(1);
+      const sessions = await sessionRepo.forCycle(cycleId);
+      expect(sessions.filter((s) => s.liftKey === 'press' && s.week === 1)).toHaveLength(1);
+    });
+
+    it("coming back to a day logged while you were on another week restores its cleared draft, not the card's stale copy", async () => {
+      const cycle = await seedCycle();
+      const cycleId = cycle.id as number;
+      // Week 2's draft is slow: it hasn't loaded yet when you come back.
+      let releaseWeek2!: () => void;
+      const week2Gate = new Promise<void>((resolve) => {
+        releaseWeek2 = resolve;
+      });
+      getSpy.mockImplementation(async (cId, week, liftKey) => {
+        if (week === 2) await week2Gate;
+        return realGet(cId, week, liftKey);
+      });
+
+      const { rerender } = render(cardFor(cycle, { liftKey: 'press', week: 1, session: null }));
+      await draftsLoaded();
+      finishWeek1MainSets();
+      rerender(cardFor(cycle, { liftKey: 'press', week: 2, session: null }));
+
+      // Week 1's session lands, and its stored draft is cleared, while week 2 is on screen.
+      await waitFor(async () => {
+        const sessions = await sessionRepo.forCycle(cycleId);
+        expect(sessions.filter((s) => s.liftKey === 'press' && s.week === 1)).toHaveLength(1);
+        expect((await workoutDayRepo.get(cycleId, 1, 'press'))?.progress).toEqual({});
+      });
+
+      // Back to week 1 before week 2's draft loaded, and before the parent
+      // re-queried its sessions (still `session: null`).
+      rerender(cardFor(cycle, { liftKey: 'press', week: 1, session: null }));
+      releaseWeek2();
+      await draftsLoaded();
+
+      expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
+      const sessions = await sessionRepo.forCycle(cycleId);
+      expect(sessions.filter((s) => s.liftKey === 'press' && s.week === 1)).toHaveLength(1);
+    });
+
+    it("a save that fails after you switched weeks doesn't flag the week on screen, and coming back retries it", async () => {
+      const cycle = await seedCycle();
+      const cycleId = cycle.id as number;
+      // The first session write fails once released; later ones go through.
+      let fail!: () => void;
+      const failing = new Promise<never>((_, reject) => {
+        fail = () => reject(new Error('QuotaExceededError'));
+      });
+      const addSpy = vi.spyOn(sessionRepo, 'add').mockImplementationOnce(() => failing);
+
+      const { rerender } = render(cardFor(cycle, { liftKey: 'press', week: 1, session: null }));
+      await draftsLoaded();
+      finishWeek1MainSets();
+      rerender(cardFor(cycle, { liftKey: 'press', week: 2, session: null }));
+      await draftsLoaded();
+
+      // Week 1's save fails while week 2 is on screen.
+      await act(async () => {
+        fail();
+        await Promise.allSettled(addSpy.mock.results.map((r) => r.value));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(screen.queryByText(/couldn't save/i)).toBeNull();
+
+      // Week 1's stored draft still has every main set done, so coming back retries the save.
+      rerender(cardFor(cycle, { liftKey: 'press', week: 1, session: null }));
+      expect(await screen.findByText(/logged this week/i)).toBeTruthy();
+      expect(addSpy).toHaveBeenCalledTimes(2);
+      const sessions = await sessionRepo.forCycle(cycleId);
+      expect(sessions.filter((s) => s.liftKey === 'press' && s.week === 1)).toHaveLength(1);
+    });
   });
 
   it('saves both of two taps that land before the card re-renders', async () => {
@@ -642,5 +758,32 @@ describe('LiftCard in-progress drafts', () => {
       expect(day?.progress['warmup:2']?.done).toBe(true);
       expect(day?.progress['warmup:1']?.done).toBe(true);
     });
+  });
+
+  it('restores untouched reps from the current prescription but keeps reps you typed (5s PRO switched on mid-workout)', async () => {
+    const cycle = await seedCycle();
+    const cycleId = cycle.id as number;
+    // Week 2: work sets 70/80/90 x3, the last an AMRAP (3+). With 5s PRO every
+    // work set is x5 and there is no AMRAP.
+    const { rerender } = render(cardFor(cycle, { liftKey: 'press', week: 2 }));
+    await draftsLoaded();
+
+    fireEvent.click(check('work set 1 (70kg)')); // reps left as prescribed (3)
+    fireEvent.change(screen.getByLabelText('Reps done'), { target: { value: '7' } }); // typed on the AMRAP
+
+    rerender(cardFor({ ...cycle, fivesPro: true }, { liftKey: 'press', week: 2 }));
+    expect(check('work set 1 (70kg)')).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(check('work set 2 (80kg)'));
+    fireEvent.click(check('work set 3 (90kg)'));
+
+    await waitFor(async () => {
+      const sessions = await sessionRepo.forCycle(cycleId);
+      expect(sessions.filter((s) => s.liftKey === 'press' && s.week === 2)).toHaveLength(1);
+    });
+    const [session] = await sessionRepo.forCycle(cycleId);
+    const work = session.sets.filter((s) => s.kind === 'main');
+    expect(work.map((s) => s.targetReps)).toEqual([5, 5, 5]);
+    expect(work[0].actualReps).toBe(5); // untouched: the new prescription, not the old 3
+    expect(work[2].actualReps).toBe(7); // typed: kept
   });
 });
