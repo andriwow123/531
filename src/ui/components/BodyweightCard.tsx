@@ -55,6 +55,18 @@ function formatAxisDate(iso: string): string {
   return `${month} ${Number(match[3])}`;
 }
 
+/** Formats an ISO date as a locale-friendly full date (e.g. "Sunday,
+ *  September 20, 2026") for the entry editor panel — constructed at local
+ *  midnight so it never shifts a day relative to the stored ISO date. */
+function formatFullDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 function readToken(name: string, fallback: string): string {
   if (typeof window === 'undefined' || typeof getComputedStyle !== 'function') return fallback;
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -196,6 +208,7 @@ export default function BodyweightCard() {
   function cancelEdit() {
     setEditingId(null);
     setEditValue('');
+    setConfirmingDeleteId(null);
   }
 
   async function saveEdit(id: number) {
@@ -317,7 +330,7 @@ export default function BodyweightCard() {
 
                 {isOpen && (
                   <div className="flex flex-col gap-3 bg-[var(--surface)] p-3">
-                    <span className="text-[12px] font-bold text-[var(--muted)]">{entry.date}</span>
+                    <span className="text-[12px] font-bold text-[var(--muted)]">{formatFullDate(entry.date)}</span>
 
                     <span className="flex items-center gap-2">
                       <input

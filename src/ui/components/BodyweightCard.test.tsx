@@ -211,6 +211,26 @@ describe('BodyweightCard', () => {
     expect(await screen.findByText('Log your bodyweight to see the trend.')).toBeTruthy();
   });
 
+  it('tapping the row header while confirming delete fully closes the editor', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    const id = await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
+
+    render(<BodyweightCard />);
+    await screen.findAllByRole('listitem');
+
+    const row = screen.getByRole('button', { name: /Jan 1/ });
+    fireEvent.click(row);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }));
+    expect(screen.getByText('Delete this entry?')).toBeTruthy();
+
+    fireEvent.click(row);
+
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Delete this entry?')).toBeNull();
+    expect(screen.queryByLabelText('Weight for Jan 1')).toBeNull();
+    expect((await bodyweightRepo.all()).find((entry) => entry.id === id)?.weight).toBe(84);
+  });
+
   it('opening a second row closes the first', async () => {
     await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
     await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
