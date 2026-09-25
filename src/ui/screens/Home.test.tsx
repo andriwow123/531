@@ -216,7 +216,9 @@ describe('Home — DayStrip pager', () => {
     await waitForLoaded();
 
     const benchDay = await screen.findByRole('button', { name: /^Bench/ });
-    expect(benchDay.getAttribute('aria-current')).toBe('true');
+    await waitFor(() => {
+      expect(benchDay.getAttribute('aria-current')).toBe('true');
+    });
     const pressDay = screen.getByRole('button', { name: /^Press/ });
     expect(pressDay.getAttribute('aria-current')).toBeNull();
     // Done marker: press already has a session logged for the selected week.

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   formatElapsed,
   formatWorkoutDuration,
@@ -29,7 +29,7 @@ interface Times {
 }
 
 const BTN_PRIMARY =
-  'min-h-9 rounded-[var(--r-pill)] bg-[var(--accent)] px-3.5 py-2 text-sm font-extrabold text-[var(--on-accent)]';
+  'min-h-9 rounded-[var(--r-pill)] bg-[var(--accent)] px-3.5 py-2 text-sm font-extrabold text-[var(--on-accent)] disabled:opacity-60';
 const BTN_SECONDARY =
   'min-h-9 rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface)] px-3.5 py-2 text-sm font-bold text-[var(--text)]';
 const BTN_TEXT = 'min-h-9 text-left text-[13px] font-bold text-[var(--muted)] underline underline-offset-2';
@@ -37,6 +37,7 @@ const TIME_INPUT =
   'min-h-9 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 text-sm font-bold tabular-nums text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]';
 const ALERT_CLASS = 'text-[12px] font-bold text-[var(--accent)]';
 const PANEL_CLASS = 'flex flex-col gap-2 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-3';
+const SAVE_ERROR_MESSAGE = "Couldn't save the timer — try again.";
 
 /**
  * Whole-workout-day timer shown near the top of a LiftCard: Start -> a live
@@ -59,6 +60,9 @@ export default function WorkoutTimer({
   const [editEnd, setEditEnd] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [, setTick] = useState(0);
+  // Home mounts four of these cards at once — a fixed id would collide across
+  // them, breaking each input's label association.
+  const finishTimeId = useId();
 
   // Identity of the workout day this render is for. Home keeps every
   // LiftCard (and this timer) mounted and just changes the `week` prop when
@@ -96,10 +100,18 @@ export default function WorkoutTimer({
   // hid the previous day synchronously; this fetches the new one).
   useEffect(() => {
     let cancelled = false;
-    workoutDayRepo.get(cycleId, week, liftKey).then((day) => {
-      if (cancelled) return;
-      setTimesState({ startedAt: day?.startedAt ?? null, endedAt: day?.endedAt ?? null });
-    });
+    workoutDayRepo.get(cycleId, week, liftKey).then(
+      (day) => {
+        if (cancelled) return;
+        setTimesState({ startedAt: day?.startedAt ?? null, endedAt: day?.endedAt ?? null });
+      },
+      () => {
+        // Unreadable: show the day as not-yet-started rather than staying
+        // hidden forever (the card would otherwise never render anything).
+        if (cancelled) return;
+        setTimesState({ startedAt: null, endedAt: null });
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -119,14 +131,23 @@ export default function WorkoutTimer({
   if (times === null) return null;
 
   // Returns whether the write was applied to the currently-displayed day
-  // (`false` means a different day is showing now — a switch happened while
-  // this write was in flight, so it was discarded rather than clobbering
-  // whatever the new day's own load already put on screen).
+  // (`false` means either a different day is showing now — a switch happened
+  // while this write was in flight, so it was discarded rather than
+  // clobbering whatever the new day's own load already put on screen — or
+  // the save itself failed, in which case an alert is shown instead).
   async function persist(next: Times): Promise<boolean> {
     const idAtCall = dayId;
-    await workoutDayRepo.setTimes(cycleId, week, liftKey, next);
+    try {
+      await workoutDayRepo.setTimes(cycleId, week, liftKey, next);
+    } catch {
+      // Keep whatever was already on screen; only complain if we're still
+      // showing the day this write was for.
+      if (identityRef.current === idAtCall) setError(SAVE_ERROR_MESSAGE);
+      return false;
+    }
     if (identityRef.current !== idAtCall) return false;
     setTimesState(next);
+    setError(null);
     return true;
   }
 
@@ -201,11 +222,11 @@ export default function WorkoutTimer({
   if (mode === 'finish') {
     return (
       <div className={PANEL_CLASS}>
-        <label htmlFor="workout-finish-time" className="text-[13px] font-bold text-[var(--text)]">
+        <label htmlFor={finishTimeId} className="text-[13px] font-bold text-[var(--text)]">
           When did you finish?
         </label>
         <input
-          id="workout-finish-time"
+          id={finishTimeId}
           type="time"
           aria-label="Finish time"
           value={finishValue}
@@ -218,7 +239,7 @@ export default function WorkoutTimer({
           </div>
         )}
         <div className="flex gap-2">
-          <button type="button" onClick={saveFinish} className={BTN_PRIMARY}>
+          <button type="button" onClick={saveFinish} disabled={finishValue === ''} className={BTN_PRIMARY}>
             Save
           </button>
           <button type="button" onClick={cancel} className={BTN_SECONDARY}>
@@ -260,7 +281,12 @@ export default function WorkoutTimer({
           </div>
         )}
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={saveEdit} className={BTN_PRIMARY}>
+          <button
+            type="button"
+            onClick={saveEdit}
+            disabled={editStart === '' || editEnd === ''}
+            className={BTN_PRIMARY}
+          >
             Save
           </button>
           <button type="button" onClick={cancel} className={BTN_SECONDARY}>
@@ -276,9 +302,16 @@ export default function WorkoutTimer({
 
   if (times.startedAt == null) {
     return (
-      <button type="button" onClick={startWorkout} className={`w-full ${BTN_PRIMARY}`}>
-        Start workout
-      </button>
+      <div className="flex flex-col gap-2">
+        <button type="button" onClick={startWorkout} className={`w-full ${BTN_PRIMARY}`}>
+          Start workout
+        </button>
+        {error && (
+          <div role="alert" className={ALERT_CLASS}>
+            {error}
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -302,21 +335,33 @@ export default function WorkoutTimer({
               End now
             </button>
           </div>
+          {error && (
+            <div role="alert" className={ALERT_CLASS}>
+              {error}
+            </div>
+          )}
         </div>
       );
     }
 
     return (
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-col items-start gap-0.5">
-          <span className="text-sm font-extrabold tabular-nums">Workout · {formatElapsed(elapsedSeconds)}</span>
-          <button type="button" onClick={openFinish} className={BTN_TEXT}>
-            Forgot to end it?
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col items-start gap-0.5">
+            <span className="text-sm font-extrabold tabular-nums">Workout · {formatElapsed(elapsedSeconds)}</span>
+            <button type="button" onClick={openFinish} className={BTN_TEXT}>
+              Forgot to end it?
+            </button>
+          </div>
+          <button type="button" onClick={endWorkout} className={BTN_PRIMARY}>
+            End workout
           </button>
         </div>
-        <button type="button" onClick={endWorkout} className={BTN_PRIMARY}>
-          End workout
-        </button>
+        {error && (
+          <div role="alert" className={ALERT_CLASS}>
+            {error}
+          </div>
+        )}
       </div>
     );
   }

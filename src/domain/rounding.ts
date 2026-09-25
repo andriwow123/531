@@ -1,9 +1,9 @@
+import type { LiftCategory, Unit } from './types';
+
 export function roundToIncrement(value: number, increment: number): number {
   if (increment <= 0) return value;
   return Math.round(value / increment) * increment;
 }
-
-import type { LiftCategory, Unit } from './types';
 
 /** Rounding increments offered per unit, ordered smallest -> largest. */
 export const ROUNDING_STEPS: Record<Unit, number[]> = {

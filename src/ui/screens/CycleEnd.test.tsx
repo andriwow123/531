@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { db } from '../../data/db';
-import { profileRepo, liftRepo, cycleRepo, sessionRepo, settingsRepo } from '../../data/repositories';
+import { profileRepo, liftRepo, cycleRepo, sessionRepo, settingsRepo, workoutDayRepo } from '../../data/repositories';
 import { defaultSettings } from '../../settings/schema';
 import { SettingsProvider } from '../settings/SettingsContext';
 import CycleEnd from './CycleEnd';
@@ -204,6 +204,45 @@ describe('CycleEnd', () => {
       const active = await cycleRepo.active();
       expect(active?.index).toBe(2);
     });
+  });
+
+  it("ends every still-running WorkoutDay timer of the completing cycle on Apply, guessing the finish time from that day's done session; an already-ended timer is left untouched", async () => {
+    const cycleId = await seed();
+
+    // press: still running — its week-3 session (from seed()) is re-dated to
+    // a known local time after the start, which guessFinishTime should pick.
+    const pressStart = new Date(2026, 8, 24, 18, 0);
+    const pressSavedAt = new Date(2026, 8, 24, 18, 45);
+    await workoutDayRepo.setTimes(cycleId, 3, 'press', { startedAt: pressStart.toISOString(), endedAt: null });
+    const sessions = await sessionRepo.forCycle(cycleId);
+    const pressSession = sessions.find((s) => s.liftKey === 'press' && s.week === 3);
+    await sessionRepo.update(pressSession!.id as number, { date: pressSavedAt.toISOString() });
+
+    // bench: already ended — must be left exactly as-is.
+    const benchStart = new Date(2026, 8, 24, 17, 0);
+    const benchEnd = new Date(2026, 8, 24, 17, 30);
+    await workoutDayRepo.setTimes(cycleId, 3, 'bench', {
+      startedAt: benchStart.toISOString(),
+      endedAt: benchEnd.toISOString(),
+    });
+
+    renderCycleEnd();
+    await screen.findByText('Overhead Press');
+
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+
+    await waitFor(async () => {
+      const active = await cycleRepo.active();
+      expect(active?.index).toBe(2);
+    });
+
+    const pressDay = await workoutDayRepo.get(cycleId, 3, 'press');
+    expect(pressDay?.startedAt).toBe(pressStart.toISOString());
+    expect(pressDay?.endedAt).toBe(pressSavedAt.toISOString());
+
+    const benchDay = await workoutDayRepo.get(cycleId, 3, 'bench');
+    expect(benchDay?.startedAt).toBe(benchStart.toISOString());
+    expect(benchDay?.endedAt).toBe(benchEnd.toISOString());
   });
 });
 

@@ -287,12 +287,21 @@ export default function Settings() {
   // pick them up too), and additionally write through to the active cycle
   // (if any) so the CURRENT cycle's workouts change right away — otherwise
   // a mid-cycle template change silently did nothing until the next cycle.
+  // The cycle write goes FIRST: if it fails, settings are left untouched too,
+  // so the two can never diverge (settings pointing at a template the active
+  // cycle never actually switched to).
   async function changeTemplate(patch: Partial<Pick<SettingsState['template'], 'selected' | 'fivesPro'>>) {
     const next = { ...settings.template, ...patch };
-    updateSettings({ template: next });
     if (cycle && cycle.id != null) {
-      await cycleRepo.setTemplate(cycle.id, next.selected, next.fivesPro);
+      try {
+        await cycleRepo.setTemplate(cycle.id, next.selected, next.fivesPro);
+      } catch {
+        return;
+      }
+      updateSettings({ template: next });
       setCycle({ ...cycle, template: next.selected, fivesPro: next.fivesPro });
+    } else {
+      updateSettings({ template: next });
     }
   }
 

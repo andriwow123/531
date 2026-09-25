@@ -224,6 +224,16 @@ describe('supportingDoneRepo', () => {
     expect(forDay).toHaveLength(1);
     expect(forDay[0]).toMatchObject({ weight: 20, reps: 10 });
   });
+
+  it('concurrent select + log for a new (date, liftKey, category, name) create exactly one row', async () => {
+    const date = '2026-09-21';
+    await Promise.all([
+      supportingDoneRepo.select(date, 'press', 'push', 'Dips', { weight: 30, reps: 10 }),
+      supportingDoneRepo.log(date, 'press', 'push', 'Dips', { weight: 32.5 }),
+    ]);
+    const forDay = await supportingDoneRepo.forDate(date);
+    expect(forDay).toHaveLength(1);
+  });
 });
 describe('supportingDoneRepo select/setDone/deselect/lastLogged', () => {
   it('select adds a today row (done:false) and is idempotent, seeding weight/reps', async () => {

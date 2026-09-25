@@ -115,26 +115,32 @@ export const supportingDoneRepo = {
     date: string, liftKey: LiftKey, category: AssistanceCategory, name: string,
     seed?: { weight: number | null; reps: number | null },
   ): Promise<void> => {
-    const existing = await findMatch(date, liftKey, category, name);
-    if (existing?.id !== undefined) return;
-    await db.supportingDone.add({
-      date, liftKey, category, name,
-      weight: seed?.weight ?? null,
-      reps: seed?.reps ?? null,
-      done: false,
+    await db.transaction('rw', db.supportingDone, async () => {
+      const existing = await findMatch(date, liftKey, category, name);
+      if (existing?.id !== undefined) return;
+      await db.supportingDone.add({
+        date, liftKey, category, name,
+        weight: seed?.weight ?? null,
+        reps: seed?.reps ?? null,
+        done: false,
+      });
     });
   },
   setDone: async (date: string, liftKey: LiftKey, category: AssistanceCategory, name: string, done: boolean): Promise<void> => {
-    const existing = await findMatch(date, liftKey, category, name);
-    if (existing?.id !== undefined) {
-      await db.supportingDone.update(existing.id, { done });
-    } else {
-      await db.supportingDone.add({ date, liftKey, category, name, weight: null, reps: null, done });
-    }
+    await db.transaction('rw', db.supportingDone, async () => {
+      const existing = await findMatch(date, liftKey, category, name);
+      if (existing?.id !== undefined) {
+        await db.supportingDone.update(existing.id, { done });
+      } else {
+        await db.supportingDone.add({ date, liftKey, category, name, weight: null, reps: null, done });
+      }
+    });
   },
   deselect: async (date: string, liftKey: LiftKey, category: AssistanceCategory, name: string): Promise<void> => {
-    const existing = await findMatch(date, liftKey, category, name);
-    if (existing?.id !== undefined) await db.supportingDone.delete(existing.id);
+    await db.transaction('rw', db.supportingDone, async () => {
+      const existing = await findMatch(date, liftKey, category, name);
+      if (existing?.id !== undefined) await db.supportingDone.delete(existing.id);
+    });
   },
   log: async (
     date: string,
@@ -143,12 +149,14 @@ export const supportingDoneRepo = {
     name: string,
     patch: { weight?: number | null; reps?: number | null },
   ): Promise<void> => {
-    const existing = await findMatch(date, liftKey, category, name);
-    if (existing?.id !== undefined) {
-      await db.supportingDone.update(existing.id, patch);
-    } else {
-      await db.supportingDone.add({ date, liftKey, category, name, weight: patch.weight ?? null, reps: patch.reps ?? null, done: false });
-    }
+    await db.transaction('rw', db.supportingDone, async () => {
+      const existing = await findMatch(date, liftKey, category, name);
+      if (existing?.id !== undefined) {
+        await db.supportingDone.update(existing.id, patch);
+      } else {
+        await db.supportingDone.add({ date, liftKey, category, name, weight: patch.weight ?? null, reps: patch.reps ?? null, done: false });
+      }
+    });
   },
   forDate: (date: string): Promise<SupportingDone[]> => db.supportingDone.where('date').equals(date).toArray(),
   lastLogged: async (

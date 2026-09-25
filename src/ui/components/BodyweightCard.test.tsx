@@ -231,6 +231,28 @@ describe('BodyweightCard', () => {
     expect((await bodyweightRepo.all()).find((entry) => entry.id === id)?.weight).toBe(84);
   });
 
+  it('"Delete entry" then "Cancel" returns to the editor, keeping the typed weight, instead of fully closing', async () => {
+    await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
+    await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });
+
+    render(<BodyweightCard />);
+    await screen.findAllByRole('listitem');
+
+    fireEvent.click(screen.getByRole('button', { name: /Jan 1/ }));
+    const editInput = screen.getByLabelText('Weight for Jan 1') as HTMLInputElement;
+    fireEvent.change(editInput, { target: { value: '90' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }));
+    expect(screen.getByText('Delete this entry?')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByText('Delete this entry?')).toBeNull();
+    const reopenedInput = screen.getByLabelText('Weight for Jan 1') as HTMLInputElement;
+    expect(reopenedInput.value).toBe('90');
+    expect((await bodyweightRepo.all())[0].weight).toBe(84); // untouched: not saved, not deleted
+  });
+
   it('opening a second row closes the first', async () => {
     await profileRepo.save({ id: 'me', units: 'kg', roundingIncrement: 2.5, tmPercent: 0.85 });
     await bodyweightRepo.add({ date: '2026-01-01', weight: 84 });

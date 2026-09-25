@@ -339,6 +339,29 @@ describe('Settings', () => {
     });
   });
 
+  it('a failing cycle write leaves settings and the active cycle unchanged, instead of letting them diverge', async () => {
+    await seedProfile();
+    const cycle = await seedCycle(); // template: 'base', fivesPro: false
+    renderSettings();
+
+    await screen.findByRole('heading', { name: /settings/i });
+    await screen.findByLabelText(/squat training max/i);
+
+    const setTemplateSpy = vi.spyOn(cycleRepo, 'setTemplate').mockRejectedValueOnce(new Error('boom'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'BBB' }));
+
+    await waitFor(() => expect(setTemplateSpy).toHaveBeenCalledWith(cycle.id, 'bbb', false));
+    // Let the rejected write's continuation run before asserting nothing changed.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect((await settingsRepo.get()).template.selected).toBe('base');
+    const active = await cycleRepo.active();
+    expect(active?.id).toBe(cycle.id);
+    expect(active?.template).toBe('base');
+    expect(screen.getByText('Main 5/3/1 sets only.')).toBeInTheDocument();
+  });
+
   it('shows captions describing the 5s PRO and Warm-up sets toggles', async () => {
     await seedProfile();
     renderSettings();

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { db } from '../../data/db';
 import { workoutDayRepo } from '../../data/repositories';
@@ -9,6 +9,10 @@ const at = (h: number, m: number, day = 24) => new Date(2026, 8, day, h, m);
 beforeEach(async () => {
   await db.delete();
   await db.open();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('WorkoutTimer', () => {
@@ -214,5 +218,103 @@ describe('WorkoutTimer', () => {
       expect(screen.queryByLabelText('End time')).toBeNull();
       expect(screen.queryByRole('alert')).toBeNull();
     });
+  });
+});
+
+describe('WorkoutTimer — empty time inputs disable Save', () => {
+  it('finish mode: clearing the Finish time input disables Save', async () => {
+    await workoutDayRepo.setTimes(1, 1, 'press', { startedAt: at(18, 0).toISOString(), endedAt: null });
+    const clock = at(18, 30);
+    render(<WorkoutTimer cycleId={1} week={1} liftKey="press" now={() => clock} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Forgot to end it?' }));
+    const input = screen.getByLabelText('Finish time') as HTMLInputElement;
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
+
+    fireEvent.change(input, { target: { value: '' } });
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('edit mode: clearing either Start or End time disables Save', async () => {
+    await workoutDayRepo.setTimes(1, 1, 'press', {
+      startedAt: at(18, 0).toISOString(),
+      endedAt: at(18, 52).toISOString(),
+    });
+    const clock = at(20, 0);
+    render(<WorkoutTimer cycleId={1} week={1} liftKey="press" now={() => clock} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const startInput = screen.getByLabelText('Start time') as HTMLInputElement;
+    const endInput = screen.getByLabelText('End time') as HTMLInputElement;
+    const saveButton = screen.getByRole('button', { name: 'Save' });
+    expect(saveButton).not.toBeDisabled();
+
+    fireEvent.change(endInput, { target: { value: '' } });
+    expect(saveButton).toBeDisabled();
+
+    fireEvent.change(endInput, { target: { value: '19:10' } });
+    expect(saveButton).not.toBeDisabled();
+
+    fireEvent.change(startInput, { target: { value: '' } });
+    expect(saveButton).toBeDisabled();
+  });
+});
+
+describe('WorkoutTimer — unique input ids', () => {
+  it('two mounted timers (different liftKeys) get different finish-time input ids', async () => {
+    await workoutDayRepo.setTimes(1, 1, 'press', { startedAt: at(18, 0).toISOString(), endedAt: null });
+    await workoutDayRepo.setTimes(1, 1, 'bench', { startedAt: at(18, 0).toISOString(), endedAt: null });
+    const clock = at(18, 30);
+    render(
+      <>
+        <WorkoutTimer cycleId={1} week={1} liftKey="press" now={() => clock} />
+        <WorkoutTimer cycleId={1} week={1} liftKey="bench" now={() => clock} />
+      </>,
+    );
+
+    const forgotButtons = await screen.findAllByRole('button', { name: 'Forgot to end it?' });
+    expect(forgotButtons).toHaveLength(2);
+    fireEvent.click(forgotButtons[0]);
+    fireEvent.click(forgotButtons[1]);
+
+    const inputs = screen.getAllByLabelText('Finish time') as HTMLInputElement[];
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0].id).not.toBe('');
+    expect(inputs[1].id).not.toBe('');
+    expect(inputs[0].id).not.toBe(inputs[1].id);
+  });
+});
+
+describe('WorkoutTimer — error handling', () => {
+  it('initial load failure: renders as not started ("Start workout") instead of staying hidden forever', async () => {
+    vi.spyOn(workoutDayRepo, 'get').mockRejectedValueOnce(new Error('boom'));
+    const clock = at(18, 0);
+    render(<WorkoutTimer cycleId={1} week={1} liftKey="press" now={() => clock} />);
+
+    expect(await screen.findByRole('button', { name: 'Start workout' })).toBeTruthy();
+  });
+
+  it('a failed save keeps the previous view and shows an inline alert, cleared on the next successful action', async () => {
+    const clock = at(18, 0);
+    render(<WorkoutTimer cycleId={1} week={1} liftKey="press" now={() => clock} />);
+    await screen.findByRole('button', { name: 'Start workout' });
+
+    const setTimesSpy = vi.spyOn(workoutDayRepo, 'setTimes').mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe("Couldn't save the timer — try again.");
+    // Previous view kept: still "Start workout", and nothing was persisted.
+    expect(screen.getByRole('button', { name: 'Start workout' })).toBeTruthy();
+    expect(await workoutDayRepo.get(1, 1, 'press')).toBeUndefined();
+    setTimesSpy.mockRestore();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+    expect(await screen.findByRole('button', { name: 'End workout' })).toBeTruthy();
   });
 });

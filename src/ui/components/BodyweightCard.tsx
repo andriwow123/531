@@ -351,7 +351,12 @@ export default function BodyweightCard() {
                         <span className="text-[12px] font-semibold text-[var(--muted)]">Delete this entry?</span>
                         <button
                           type="button"
-                          onClick={() => setConfirmingDeleteId(null)}
+                          onClick={() => {
+                            // Back to the editor for this entry (not a full
+                            // close) — keeps whatever weight was typed.
+                            setConfirmingDeleteId(null);
+                            setEditingId(entry.id);
+                          }}
                           className="min-h-9 rounded-[var(--r-pill)] px-2 text-[12px] font-bold text-[var(--muted)] hover:text-[var(--text)]"
                         >
                           Cancel

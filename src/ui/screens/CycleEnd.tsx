@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { suggestProgression, estimate1RM, LIFT_ORDER, effectiveRounding } from '../../domain';
+import { suggestProgression, estimate1RM, LIFT_ORDER, effectiveRounding, guessFinishTime } from '../../domain';
 import type { LiftKey, ProgressionDecision } from '../../domain';
-import { cycleRepo, liftRepo, profileRepo, sessionRepo } from '../../data/repositories';
-import type { Cycle, Lift, Session, LoggedSet } from '../../data/repositories';
+import { cycleRepo, liftRepo, profileRepo, sessionRepo, workoutDayRepo } from '../../data/repositories';
+import type { Cycle, Lift, Session, LoggedSet, WorkoutDay } from '../../data/repositories';
 import { useSettings } from '../settings/SettingsContext';
 
 const LIFT_NAMES: Record<LiftKey, string> = {
@@ -61,6 +61,11 @@ function topMainSet(session: Session | undefined): LoggedSet | undefined {
 function topSetCompletedFor(session: Session | undefined): boolean {
   const top = topMainSet(session);
   return !!top && top.done && (top.actualReps ?? 0) >= 1;
+}
+
+/** A WorkoutDay timer that was started but never ended. */
+function stillRunning(day: WorkoutDay): day is WorkoutDay & { startedAt: string } {
+  return day.startedAt != null && day.endedAt === null;
 }
 
 function suggestFor(row: {
@@ -166,13 +171,32 @@ export default function CycleEnd() {
     if (loaded.rows.some((row) => !(row.newTm > 0))) return;
     setApplying(true);
 
+    const cycleId = loaded.cycle.id;
     const tm = {} as Record<LiftKey, number>;
     for (const row of loaded.rows) {
       tm[row.liftKey] = row.newTm;
     }
 
     await Promise.all(loaded.rows.map((row) => liftRepo.update(row.liftKey, { trainingMax: row.newTm })));
-    await cycleRepo.complete(loaded.cycle.id);
+
+    // End every still-running WorkoutDay timer of the cycle now completing.
+    // Home redirects here the instant the last week-4 session saves, so any
+    // OTHER day of this cycle (and a timer left running on it) becomes
+    // unreachable the moment this screen replaces it — it could never be
+    // ended, and History would never show its duration.
+    const [days, sessions] = await Promise.all([workoutDayRepo.forCycle(cycleId), sessionRepo.forCycle(cycleId)]);
+    const nowIso = new Date().toISOString();
+    await Promise.all(
+      days.filter(stillRunning).map((day) => {
+        const doneSession = sessions.find(
+          (s) => s.status === 'done' && s.liftKey === day.liftKey && s.week === day.week,
+        );
+        const endedAt = guessFinishTime(day.startedAt, doneSession?.date, nowIso);
+        return workoutDayRepo.setTimes(cycleId, day.week, day.liftKey, { startedAt: day.startedAt, endedAt });
+      }),
+    );
+
+    await cycleRepo.complete(cycleId);
     await cycleRepo.add({
       index: loaded.cycle.index + 1,
       startedAt: new Date().toISOString(),
